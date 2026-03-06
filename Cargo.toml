@@ -1,0 +1,5 @@
+[workspace]
+resolver = "3"
+members = ["dashboard", "strava"]
+default-members = [ "dashboard" ]
+rust-version = "1.93"

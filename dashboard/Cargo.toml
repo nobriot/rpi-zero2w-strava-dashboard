@@ -1,0 +1,19 @@
+[package]
+name = "rpi-zero2w-strava-dash"
+version = "0.1.0"
+edition = "2024"
+authors = ["Nicolas Woltmann <github@nico-ow.mozmail.com>"]
+description = "Strava dashboard for Raspberry Pi Zero 2W with Waveshare PhotoPainter e-paper display"
+license = "MIT"
+repository = "https://github.com/nobriot/rpi-zero2w-strava-dash"
+
+[[bin]]
+name = "dashboard"
+path = "src/main.rs"
+
+[dependencies]
+strava = { path = "../strava" }
+chrono = "0.4"
+log = "0.4.29"
+thiserror = "2.0.18"
+env_logger = "0.11.9"
