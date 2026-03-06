@@ -38,7 +38,7 @@ pub fn run_auth_flow(config: &Config) -> Result<TokenResponse, StravaError> {
 
     let redirect_uri = format!("http://localhost:{port}");
     let authorize_url = format!(
-        "{STRAVA_AUTHORIZE_URL}?client_id={}&response_type=code&redirect_uri={redirect_uri}&approval_prompt=force&scope=activity:read_all",
+        "{STRAVA_AUTHORIZE_URL}?client_id={}&response_type=code&redirect_uri={redirect_uri}&approval_prompt=force&scope=activity:read_all,profile:read_all",
         config.client_id()
     );
 
@@ -71,10 +71,7 @@ fn wait_for_callback(listener: &TcpListener) -> Result<String, StravaError> {
         .nth(1)
         .ok_or_else(|| StravaError::OAuthError("Malformed HTTP request".into()))?;
 
-    let query = path
-        .split_once('?')
-        .map(|(_, q)| q)
-        .unwrap_or("");
+    let query = path.split_once('?').map(|(_, q)| q).unwrap_or("");
 
     // Check for error (user denied authorization)
     if let Some(error) = extract_query_param(query, "error") {
@@ -101,7 +98,11 @@ fn wait_for_callback(listener: &TcpListener) -> Result<String, StravaError> {
 fn extract_query_param(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|pair| {
         let (k, v) = pair.split_once('=')?;
-        if k == key { Some(v.to_string()) } else { None }
+        if k == key {
+            Some(v.to_string())
+        } else {
+            None
+        }
     })
 }
 
@@ -138,7 +139,9 @@ fn exchange_code_for_tokens(
         .map_err(|e| StravaError::OAuthError(format!("Failed to read token response: {e}")))?;
 
     let token_response: TokenResponse = serde_json::from_str(&body).map_err(|e| {
-        StravaError::OAuthError(format!("Failed to parse token response: {e} — body: {body}"))
+        StravaError::OAuthError(format!(
+            "Failed to parse token response: {e} — body: {body}"
+        ))
     })?;
 
     log::info!("Token exchange successful");

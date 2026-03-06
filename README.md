@@ -30,13 +30,22 @@ Displays your Strava stats on a beautiful 7.5" e-paper display:
 ## 📦 Software Prerequisites
 
 1. **Raspberry Pi OS** (64-bit recommended)
-2. **Rust** (stable toolchain)
+2. **Rust** (stable toolchain, 1.93+)
+3. **Docker** (for cross-compilation only)
+4. **[cross](https://github.com/cross-rs/cross)** (for cross-compilation only)
 
-### Install Rust on Raspberry Pi:
+### Install Rust on your dev machine:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
+```
+
+### Install cross-compilation tools:
+
+```bash
+rustup target add aarch64-unknown-linux-gnu
+cargo install cross
 ```
 
 ---
@@ -65,10 +74,26 @@ Fill in your:
 ### 3. Build
 
 ```bash
-cargo build --release
+# Local debug build
+cargo build
+
+# Local release build
+cargo release
+
+# Cross-compile for Raspberry Pi Zero 2W (requires Docker + cross)
+cross build --release --target aarch64-unknown-linux-gnu
+
+# Run all tests
+cargo test-all
 ```
 
-### 4. Run
+### 4. Deploy to Raspberry Pi
+
+```bash
+scp target/aarch64-unknown-linux-gnu/release/dashboard pi@<host>:~/
+```
+
+### 5. Run
 
 ```bash
 sudo ./target/release/rpi-zero2w-strava-dash
