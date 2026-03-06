@@ -8,6 +8,46 @@ pub struct Config {
     client_id: String,
     client_secret: String,
     refresh_token: String,
+
+    /// Display and dashboard settings (optional section)
+    #[serde(default)]
+    pub display: DisplayConfig,
+}
+
+/// Display and scheduling configuration.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DisplayConfig {
+    /// Sleep interval between refreshes in seconds (default: 10800 = 3 hours)
+    #[serde(default = "default_sleep_interval")]
+    pub sleep_interval_secs: u64,
+
+    /// Yearly distance goal in km (default: 1000)
+    #[serde(default = "default_yearly_goal")]
+    pub yearly_goal_km: f64,
+
+    /// Primary sport type shown on the dashboard: "Run", "Ride", or "Swim"
+    #[serde(default = "default_sport_type")]
+    pub sport_type: String,
+}
+
+fn default_sleep_interval() -> u64 {
+    10800
+}
+fn default_yearly_goal() -> f64 {
+    1000.0
+}
+fn default_sport_type() -> String {
+    "Run".into()
+}
+
+impl Default for DisplayConfig {
+    fn default() -> Self {
+        Self {
+            sleep_interval_secs: default_sleep_interval(),
+            yearly_goal_km: default_yearly_goal(),
+            sport_type: default_sport_type(),
+        }
+    }
 }
 
 impl Config {
@@ -38,6 +78,12 @@ impl Config {
 client_id = "YOUR_CLIENT_ID"
 client_secret = "YOUR_CLIENT_SECRET"
 refresh_token = "YOUR_REFRESH_TOKEN"
+
+# Display settings (all optional, shown with defaults)
+# [display]
+# sleep_interval_secs = 10800  # 3 hours
+# yearly_goal_km = 1000.0
+# sport_type = "Run"           # "Run", "Ride", or "Swim"
 "#;
             if let Err(e) = fs::write(&path, template) {
                 return Err(format!("Failed to write config template: {e}"));

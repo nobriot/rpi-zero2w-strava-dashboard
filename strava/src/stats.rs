@@ -12,6 +12,16 @@ pub struct DashboardStats {
     pub longest_ride: Option<ActivityHighlight>,
 
     pub last_activity: Option<ActivityHighlight>,
+
+    /// Athlete first name (for display header)
+    pub athlete_first_name: String,
+
+    /// Total number of activities
+    pub activity_count: usize,
+    /// Total moving time across all activities in seconds
+    pub total_moving_time_secs: u32,
+    /// Decoded polyline points (lat, lon) from the last activity
+    pub last_activity_polyline: Vec<(f64, f64)>,
 }
 
 /// A single activity highlighted for a specific reason (fastest, longest, last).
@@ -27,7 +37,11 @@ pub struct ActivityHighlight {
 impl DashboardStats {
     /// Compute dashboard stats from aggregate athlete stats and the list of
     /// individual activities fetched for the current year.
-    pub fn compute(stats: &AthleteStats, activities: &[SummaryActivity]) -> Self {
+    pub fn compute(
+        stats: &AthleteStats,
+        activities: &[SummaryActivity],
+        athlete_first_name: &str,
+    ) -> Self {
         let ytd_run_distance_km = stats
             .ytd_totals(SportType::Run)
             .map(|t: &ActivityTotal| t.distance_km())
@@ -76,6 +90,13 @@ impl DashboardStats {
             }
         });
 
+        let activity_count = activities.len();
+        let total_moving_time_secs: u32 = activities.iter().map(|a| a.moving_time).sum();
+        let last_activity_polyline = activities
+            .first()
+            .map(|a| a.polyline_points())
+            .unwrap_or_default();
+
         Self {
             ytd_run_distance_km,
             ytd_ride_distance_km,
@@ -84,7 +105,23 @@ impl DashboardStats {
             longest_run,
             longest_ride,
             last_activity,
+            athlete_first_name: athlete_first_name.to_string(),
+            activity_count,
+            total_moving_time_secs,
+            last_activity_polyline,
         }
+    }
+
+    /// Number of activities
+    pub fn activity_count(&self) -> usize {
+        self.activity_count
+    }
+
+    /// Format total moving time as "Xh Ym"
+    pub fn total_time_display(&self) -> String {
+        let hours = self.total_moving_time_secs / 3600;
+        let minutes = (self.total_moving_time_secs % 3600) / 60;
+        format!("{hours}h {minutes}m")
     }
 
     pub fn print_summary(&self) {

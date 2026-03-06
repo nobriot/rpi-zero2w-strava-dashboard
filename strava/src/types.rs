@@ -491,6 +491,18 @@ pub struct SummaryActivity {
     /// The start date of the activity in local timezone (ISO 8601)
     #[serde(default)]
     pub start_date_local: Option<String>,
+
+    /// Map with summary polyline for route visualization
+    #[serde(default)]
+    pub map: Option<PolylineMap>,
+}
+
+/// Map data from a Strava activity, containing an encoded polyline.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PolylineMap {
+    /// Google-encoded polyline of the activity route
+    #[serde(default)]
+    pub summary_polyline: Option<String>,
 }
 
 impl SummaryActivity {
@@ -546,6 +558,73 @@ impl SummaryActivity {
     pub fn is_ride(&self) -> bool {
         self.activity_type.as_deref() == Some("Ride")
     }
+
+    /// Get the decoded polyline points as (lat, lon) pairs.
+    pub fn polyline_points(&self) -> Vec<(f64, f64)> {
+        self.map
+            .as_ref()
+            .and_then(|m| m.summary_polyline.as_deref())
+            .map(decode_polyline)
+            .unwrap_or_default()
+    }
+}
+
+/// Decode a Google Encoded Polyline into a list of (latitude, longitude) pairs.
+/// See: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+pub fn decode_polyline(encoded: &str) -> Vec<(f64, f64)> {
+    let mut points = Vec::new();
+    let mut lat: i64 = 0;
+    let mut lng: i64 = 0;
+    let bytes = encoded.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        // Decode latitude delta
+        let (dlat, next) = decode_value(bytes, i);
+        i = next;
+        lat += dlat;
+
+        if i >= bytes.len() {
+            break;
+        }
+
+        // Decode longitude delta
+        let (dlng, next) = decode_value(bytes, i);
+        i = next;
+        lng += dlng;
+
+        points.push((lat as f64 / 1e5, lng as f64 / 1e5));
+    }
+
+    points
+}
+
+fn decode_value(bytes: &[u8], start: usize) -> (i64, usize) {
+    let mut result: i64 = 0;
+    let mut shift = 0;
+    let mut i = start;
+
+    loop {
+        if i >= bytes.len() {
+            break;
+        }
+        let b = (bytes[i] as i64) - 63;
+        i += 1;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+        if b < 0x20 {
+            break;
+        }
+    }
+
+    // Undo the two's complement encoding
+    if result & 1 != 0 {
+        result = !(result >> 1);
+    } else {
+        result >>= 1;
+    }
+
+    (result, i)
 }
 
 /// Sport type enum for querying stats

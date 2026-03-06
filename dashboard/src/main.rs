@@ -7,6 +7,8 @@ mod args;
 use args::Args;
 
 use chrono::{Datelike, NaiveDate, Utc};
+use std::thread;
+use std::time::Duration;
 
 use crate::errors::DashError;
 
@@ -53,44 +55,123 @@ fn run() -> Result<()> {
         Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
 
     if args.auth {
-        run_auth()?
+        return run_auth();
     }
 
     // Load config
     let mut config = strava::config::Config::load().map_err(errors::DashError::Config)?;
     log::info!("Config loaded successfully");
 
-    match try_run(&config) {
-        Ok(()) => Ok(()),
-        Err(errors::DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
-            log::warn!("Unauthorized — attempting OAuth re-authorization");
-            eprintln!("\nReceived 401 Unauthorized. Starting OAuth authorization flow...");
+    let sleep_secs = config.display.sleep_interval_secs;
 
-            let token_response = strava::oauth::run_auth_flow(&config)?;
-            config.set_refresh_token(token_response.refresh_token);
-            config.save().map_err(errors::DashError::Config)?;
+    loop {
+        match try_cycle(&config, &args) {
+            Ok(()) => {}
+            Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
+                log::warn!("Unauthorized — attempting OAuth re-authorization");
+                eprintln!("\nReceived 401 Unauthorized. Starting OAuth authorization flow...");
 
-            try_run(&config)
+                let token_response = strava::oauth::run_auth_flow(&config)?;
+                config.set_refresh_token(token_response.refresh_token);
+                config.save().map_err(errors::DashError::Config)?;
+
+                // Retry once after re-auth
+                if let Err(e) = try_cycle(&config, &args) {
+                    eprintln!("Error after re-authorization: {e:?}");
+                }
+            }
+            Err(e) => {
+                eprintln!("Error during cycle: {e:?}");
+            }
         }
-        Err(e) => Err(e),
+
+        if args.once {
+            break;
+        }
+
+        log::info!("Sleeping for {} seconds...", sleep_secs);
+        thread::sleep(Duration::from_secs(sleep_secs));
     }
+
+    Ok(())
 }
 
-fn try_run(config: &strava::config::Config) -> Result<()> {
+/// Run one full cycle: fetch stats → render image → display (or save PNG).
+fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
+    let stats = fetch_stats(config)?;
+
+    // Read battery status (non-fatal if unavailable)
+    let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
+        Ok(status) => {
+            log::info!(
+                "Battery: {}% ({:.2}V, {})",
+                status.percentage,
+                status.voltage,
+                if status.is_charging {
+                    "charging"
+                } else {
+                    "discharging"
+                }
+            );
+            Some(status)
+        }
+        Err(e) => {
+            log::debug!("Battery monitor unavailable: {e}");
+            None
+        }
+    };
+
+    // Render
+    let display_config = display::renderer::DisplayConfig {
+        yearly_goal_km: config.display.yearly_goal_km,
+        sport_label: config.display.sport_type.to_uppercase(),
+    };
+    let img = display::renderer::render_dashboard(&stats, battery.as_ref(), &display_config);
+
+    // Save PNG if requested
+    if let Some(ref path) = args.save_png {
+        img.save(path)
+            .map_err(|e| DashError::Display(display::errors::DisplayError::Render(e.to_string())))?;
+        log::info!("Dashboard saved to {path}");
+    }
+
+    // Try to push to e-paper display
+    match display::epd7in3e::Epd7in3e::new() {
+        Ok(mut epd) => {
+            let buf = display::palette::quantize_to_epd_buffer(&img);
+            epd.display_image(&buf)?;
+            epd.sleep()?;
+            log::info!("E-paper display updated");
+        }
+        Err(e) => {
+            log::info!("E-paper display not available: {e}");
+            if args.save_png.is_none() {
+                // Auto-save PNG fallback when no display and no explicit save path
+                let fallback_path = "dashboard_preview.png";
+                img.save(fallback_path).map_err(|e| {
+                    DashError::Display(display::errors::DisplayError::Render(e.to_string()))
+                })?;
+                log::info!("Dashboard saved to {fallback_path} (no display available)");
+            }
+        }
+    }
+
+    stats.print_summary();
+    Ok(())
+}
+
+/// Fetch Strava data and compute dashboard stats.
+fn fetch_stats(config: &strava::config::Config) -> Result<strava::stats::DashboardStats> {
     let mut client = strava::client::Client::new(config.clone());
-    // Get token
     client.get_token()?;
 
-    // Get athlete (cached)
     log::info!("Getting athlete");
     let athlete = client.get_athlete()?;
     log::info!("Athlete: {} (id: {})", athlete.full_name(), athlete.id);
 
-    // Get athlete stats (cached)
     log::info!("Getting athlete stats");
     let stats = client.get_athlete_stats(athlete.id)?;
 
-    // Get activities for this year (cached)
     let year_start = NaiveDate::from_ymd_opt(Utc::now().year(), 1, 1)
         .unwrap()
         .and_hms_opt(0, 0, 0)
@@ -102,9 +183,9 @@ fn try_run(config: &strava::config::Config) -> Result<()> {
     let activities = client.get_activities(year_start)?;
     log::info!("Fetched {} activities", activities.len());
 
-    // Compute and display dashboard stats
-    let dashboard = strava::stats::DashboardStats::compute(&stats, &activities);
-    dashboard.print_summary();
-
-    Ok(())
+    Ok(strava::stats::DashboardStats::compute(
+        &stats,
+        &activities,
+        &athlete.firstname.as_deref().unwrap_or("Athlete"),
+    ))
 }

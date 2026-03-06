@@ -12,4 +12,7 @@ pub enum DashError {
 
     #[error("Strava API error: {0}")]
     Strava(#[from] strava::errors::StravaError),
+
+    #[error("Display error: {0}")]
+    Display(#[from] display::errors::DisplayError),
 }
