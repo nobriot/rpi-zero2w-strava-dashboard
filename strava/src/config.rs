@@ -80,4 +80,51 @@ refresh_token = "YOUR_REFRESH_TOKEN"
     pub fn refresh_token(&self) -> &str {
         &self.refresh_token
     }
+
+    pub fn set_refresh_token(&mut self, token: String) {
+        self.refresh_token = token;
+    }
+
+    /// Save the current config back to disk.
+    pub fn save(&self) -> Result<(), String> {
+        let toml_string = toml::to_string_pretty(self)
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
+
+        let contents = format!(
+            "# Strava API credentials\n# See docs/strava.md for setup instructions\n\n{toml_string}"
+        );
+
+        fs::write(Self::config_path(), contents)
+            .map_err(|e| format!("Failed to write config: {e}"))?;
+
+        log::info!("Config saved to {}", Self::config_path().display());
+        Ok(())
+    }
+
+    /// Load config allowing a placeholder refresh_token (for use with --auth).
+    /// Still requires valid client_id and client_secret.
+    pub fn load_for_auth() -> Result<Self, String> {
+        let path = Self::config_path();
+
+        if !path.exists() {
+            // Delegate to load() which creates the template
+            return Self::load();
+        }
+
+        let contents = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read config file {}: {e}", path.display()))?;
+
+        let config: Config = toml::from_str(&contents)
+            .map_err(|e| format!("Failed to parse config file {}: {e}", path.display()))?;
+
+        if config.client_id == "YOUR_CLIENT_ID" || config.client_secret == "YOUR_CLIENT_SECRET" {
+            return Err(format!(
+                "Please fill in your client_id and client_secret in: {}",
+                path.display()
+            ));
+        }
+
+        log::info!("Loaded config (for auth) from {}", path.display());
+        Ok(config)
+    }
 }

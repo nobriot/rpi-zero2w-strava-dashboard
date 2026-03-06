@@ -7,6 +7,9 @@ pub enum DashError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    #[error("Argument error: {0}")]
+    Argument(String),
+
     #[error("Strava API error: {0}")]
-    Strava(String),
+    Strava(#[from] strava::errors::StravaError),
 }

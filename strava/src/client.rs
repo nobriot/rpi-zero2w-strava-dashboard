@@ -42,6 +42,10 @@ impl Client {
             .send()
             .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
 
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(StravaError::Unauthorized);
+        }
+
         if !response.status().is_success() {
             return Err(StravaError::StravaApiResponseError(format!(
                 "Token refresh failed with status: {}",
@@ -80,6 +84,10 @@ impl Client {
             .header("Accept", "application/json")
             .send()
             .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(StravaError::Unauthorized);
+        }
 
         if !response.status().is_success() {
             let status = response.status();
