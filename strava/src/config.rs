@@ -21,6 +21,14 @@ pub struct DisplayConfig {
     #[serde(default = "default_sleep_interval")]
     pub sleep_interval_secs: u64,
 
+    /// Hour (0–23, local time) when the quiet period starts — no fetching/refresh (default: 20)
+    #[serde(default = "default_quiet_start")]
+    pub quiet_start_hour: u32,
+
+    /// Hour (0–23, local time) when the quiet period ends (default: 8)
+    #[serde(default = "default_quiet_end")]
+    pub quiet_end_hour: u32,
+
     /// Yearly running goal in km (default: 2000)
     #[serde(default = "default_run_goal")]
     pub run_goal_km: f64,
@@ -33,6 +41,12 @@ pub struct DisplayConfig {
 fn default_sleep_interval() -> u64 {
     10800
 }
+fn default_quiet_start() -> u32 {
+    20
+}
+fn default_quiet_end() -> u32 {
+    8
+}
 fn default_run_goal() -> f64 {
     2000.0
 }
@@ -44,6 +58,8 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
             sleep_interval_secs: default_sleep_interval(),
+            quiet_start_hour: default_quiet_start(),
+            quiet_end_hour: default_quiet_end(),
             run_goal_km: default_run_goal(),
             ride_goal_km: default_ride_goal(),
         }
@@ -82,6 +98,8 @@ refresh_token = "YOUR_REFRESH_TOKEN"
 # Display settings (all optional, shown with defaults)
 # [display]
 # sleep_interval_secs = 10800  # 3 hours
+# quiet_start_hour = 20        # no refresh between 20:00 and 08:00
+# quiet_end_hour = 8
 # run_goal_km = 2000.0
 # ride_goal_km = 5000.0
 "#;

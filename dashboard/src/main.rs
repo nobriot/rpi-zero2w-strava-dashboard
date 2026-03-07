@@ -6,7 +6,7 @@ use errors::Result;
 mod args;
 use args::Args;
 
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
 use std::thread;
 use std::time::Duration;
 
@@ -65,6 +65,18 @@ fn run() -> Result<()> {
     let sleep_secs = config.display.sleep_interval_secs;
 
     loop {
+        // Check if we're inside the quiet window
+        if !args.once && is_quiet_time(&config.display) {
+            let secs = seconds_until_quiet_end(&config.display);
+            log::info!(
+                "Quiet hours ({:02}:00–{:02}:00) — sleeping for {secs}s until wake",
+                config.display.quiet_start_hour,
+                config.display.quiet_end_hour,
+            );
+            thread::sleep(Duration::from_secs(secs));
+            // After waking, fall through to run a cycle immediately
+        }
+
         match try_cycle(&config, &args) {
             Ok(()) => {}
             Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
@@ -188,4 +200,46 @@ fn fetch_stats(config: &strava::config::Config) -> Result<strava::stats::Dashboa
         &activities,
         &athlete.firstname.as_deref().unwrap_or("Athlete"),
     ))
+}
+
+/// Check whether the current local time falls inside the quiet window.
+fn is_quiet_time(display: &strava::config::DisplayConfig) -> bool {
+    let hour = Local::now().hour();
+    let start = display.quiet_start_hour;
+    let end = display.quiet_end_hour;
+
+    if start <= end {
+        // e.g. quiet 02:00–06:00 (no midnight wrap)
+        hour >= start && hour < end
+    } else {
+        // e.g. quiet 20:00–08:00 (wraps midnight)
+        hour >= start || hour < end
+    }
+}
+
+/// Compute seconds from now until the quiet window ends.
+fn seconds_until_quiet_end(display: &strava::config::DisplayConfig) -> u64 {
+    let now = Local::now();
+    let hour = now.hour();
+    let end = display.quiet_end_hour;
+
+    // Hours remaining until the end hour
+    let hours_left = if hour < end {
+        end - hour
+    } else {
+        // Past midnight wrap: remaining hours today + hours into tomorrow
+        (24 - hour) + end
+    };
+
+    let minutes_left = 60 - now.minute();
+    // Subtract one hour because the minutes already cover part of it,
+    // but ensure we don't underflow.
+    let total_secs = if hours_left > 0 {
+        ((hours_left - 1) as u64 * 3600) + (minutes_left as u64 * 60)
+    } else {
+        minutes_left as u64 * 60
+    };
+
+    // At least 60 seconds to avoid a busy-loop from rounding
+    total_secs.max(60)
 }
