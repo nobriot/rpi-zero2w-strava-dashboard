@@ -59,6 +59,14 @@ fn run() -> Result<()> {
         return run_auth();
     }
 
+    if args.clear_cache {
+        strava::cache::Cache::new()
+            .clear()
+            .map_err(errors::DashError::Config)?;
+        eprintln!("Cache cleared.");
+        return Ok(());
+    }
+
     // Load config
     let mut config = strava::config::Config::load().map_err(errors::DashError::Config)?;
     log::info!("Config loaded successfully");

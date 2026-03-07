@@ -17,4 +17,8 @@ pub struct Args {
     /// Save the rendered dashboard as a PNG file (for testing without e-paper)
     #[arg(long, value_name = "PATH")]
     pub save_png: Option<String>,
+
+    /// Clear all cached data (athlete, stats, activities, avatar) and exit
+    #[arg(long)]
+    pub clear_cache: bool,
 }

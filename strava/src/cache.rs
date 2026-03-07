@@ -32,6 +32,18 @@ impl Cache {
         }
     }
 
+    /// Delete the entire cache directory.
+    pub fn clear(&self) -> Result<(), String> {
+        if self.dir.exists() {
+            fs::remove_dir_all(&self.dir)
+                .map_err(|e| format!("Failed to remove cache dir {}: {e}", self.dir.display()))?;
+            log::info!("Cache cleared: {}", self.dir.display());
+        } else {
+            log::info!("Cache directory does not exist, nothing to clear");
+        }
+        Ok(())
+    }
+
     /// Set a custom TTL (in seconds) for cache freshness checks.
     pub fn with_max_age(mut self, seconds: u64) -> Self {
         self.default_max_age = seconds;
