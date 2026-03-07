@@ -146,7 +146,26 @@ fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
         image::imageops::FilterType::Triangle,
     );
     let rgb = resized.to_rgb8();
-    image::imageops::overlay(img, &rgb, AVATAR_PAD, AVATAR_PAD);
+
+    // Draw as a circle: only copy pixels within the circular radius
+    let cx = AVATAR_SIZE as f64 / 2.0;
+    let cy = AVATAR_SIZE as f64 / 2.0;
+    let r = cx;
+
+    for y in 0..AVATAR_SIZE {
+        for x in 0..AVATAR_SIZE {
+            let dx = x as f64 - cx + 0.5;
+            let dy = y as f64 - cy + 0.5;
+            if dx * dx + dy * dy <= r * r {
+                let px = rgb.get_pixel(x, y);
+                let ix = AVATAR_PAD as u32 + x;
+                let iy = AVATAR_PAD as u32 + y;
+                if ix < img.width() && iy < img.height() {
+                    img.put_pixel(ix, iy, *px);
+                }
+            }
+        }
+    }
 }
 
 /// Draw one goal bar per active sport. Returns the Y position after the last bar.
