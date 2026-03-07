@@ -1,5 +1,9 @@
 # Copilot Instructions
 
+## Git workflow
+
+Do **not** commit changes. Only modify code and let the user review and commit manually.
+
 ## Build & Test
 
 ```bash
