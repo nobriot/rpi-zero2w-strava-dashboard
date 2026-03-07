@@ -71,13 +71,14 @@ pub fn render_dashboard(
     stats: &DashboardStats,
     battery: Option<&BatteryStatus>,
     config: &DisplayConfig,
+    avatar: Option<&[u8]>,
 ) -> RgbImage {
     let mut img = RgbImage::from_pixel(W, H, WHITE);
 
     let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
 
-    draw_header(&mut img, &font_bold, stats, battery);
+    draw_header(&mut img, &font_bold, stats, battery, avatar);
     let y = draw_sport_bars(&mut img, &font, &font_bold, stats, config);
     let stats_y = draw_stats_row(&mut img, &font, &font_bold, stats, y);
     draw_latest_activity(&mut img, &font, &font_bold, stats, stats_y);
@@ -91,9 +92,15 @@ fn draw_header(
     font_bold: &FontRef,
     stats: &DashboardStats,
     battery: Option<&BatteryStatus>,
+    avatar: Option<&[u8]>,
 ) {
     let header_h = 60;
     draw_filled_rect_mut(img, Rect::at(0, 0).of_size(W, header_h), RED);
+
+    // Avatar on the left
+    if let Some(bytes) = avatar {
+        draw_avatar(img, bytes);
+    }
 
     let year = Utc::now().year();
     let title = format!("STRAVA  |  {} - {}", stats.athlete_first_name, year);
@@ -120,6 +127,26 @@ fn draw_header(
             &bat_text,
         );
     }
+}
+
+const AVATAR_SIZE: u32 = 44;
+const AVATAR_PAD: i64 = 8;
+
+fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
+    let avatar = match image::load_from_memory(avatar_bytes) {
+        Ok(a) => a,
+        Err(e) => {
+            log::warn!("Failed to decode avatar image: {e}");
+            return;
+        }
+    };
+    let resized = avatar.resize_exact(
+        AVATAR_SIZE,
+        AVATAR_SIZE,
+        image::imageops::FilterType::Triangle,
+    );
+    let rgb = resized.to_rgb8();
+    image::imageops::overlay(img, &rgb, AVATAR_PAD, AVATAR_PAD);
 }
 
 /// Draw one goal bar per active sport. Returns the Y position after the last bar.

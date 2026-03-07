@@ -7,6 +7,7 @@ mod args;
 use args::Args;
 
 use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
@@ -110,7 +111,7 @@ fn run() -> Result<()> {
 
 /// Run one full cycle: fetch stats → render image → display (or save PNG).
 fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
-    let stats = fetch_stats(config)?;
+    let (stats, avatar) = fetch_stats(config)?;
 
     // Read battery status (non-fatal if unavailable)
     let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
@@ -139,7 +140,12 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
         ride_goal_km: config.display.ride_goal_km,
         swim_goal_km: config.display.swim_goal_km,
     };
-    let img = display::renderer::render_dashboard(&stats, battery.as_ref(), &display_config);
+    let img = display::renderer::render_dashboard(
+        &stats,
+        battery.as_ref(),
+        &display_config,
+        avatar.as_deref(),
+    );
 
     // Save PNG if requested
     if let Some(ref path) = args.save_png {
@@ -173,14 +179,19 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Fetch Strava data and compute dashboard stats.
-fn fetch_stats(config: &strava::config::Config) -> Result<strava::stats::DashboardStats> {
+/// Fetch Strava data and compute dashboard stats. Also fetches/caches the avatar.
+fn fetch_stats(
+    config: &strava::config::Config,
+) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
     let mut client = strava::client::Client::new(config.clone());
     client.get_token()?;
 
     log::info!("Getting athlete");
     let athlete = client.get_athlete()?;
     log::info!("Athlete: {} (id: {})", athlete.full_name(), athlete.id);
+
+    // Fetch avatar (non-fatal if unavailable)
+    let avatar = load_or_fetch_avatar(&client, athlete.profile.as_deref());
 
     log::info!("Getting athlete stats");
     let stats = client.get_athlete_stats(athlete.id)?;
@@ -196,11 +207,13 @@ fn fetch_stats(config: &strava::config::Config) -> Result<strava::stats::Dashboa
     let activities = client.get_activities(year_start)?;
     log::info!("Fetched {} activities", activities.len());
 
-    Ok(strava::stats::DashboardStats::compute(
+    let dashboard = strava::stats::DashboardStats::compute(
         &stats,
         &activities,
         &athlete.firstname.as_deref().unwrap_or("Athlete"),
-    ))
+    );
+
+    Ok((dashboard, avatar))
 }
 
 /// Check whether the current local time falls inside the quiet window.
@@ -243,4 +256,47 @@ fn seconds_until_quiet_end(display: &strava::config::DisplayConfig) -> u64 {
 
     // At least 60 seconds to avoid a busy-loop from rounding
     total_secs.max(60)
+}
+
+/// Load avatar from cache or fetch from Strava CDN.
+fn load_or_fetch_avatar(
+    client: &strava::client::Client,
+    profile_url: Option<&str>,
+) -> Option<Vec<u8>> {
+    let cache_path = avatar_cache_path();
+
+    // Use cached file if it exists
+    if cache_path.exists() {
+        match std::fs::read(&cache_path) {
+            Ok(bytes) if !bytes.is_empty() => {
+                log::info!("Avatar loaded from cache");
+                return Some(bytes);
+            }
+            _ => {}
+        }
+    }
+
+    // Download from URL
+    let url = profile_url?;
+    log::info!("Downloading avatar from {url}");
+    match client.download_bytes(url) {
+        Ok(bytes) => {
+            if let Some(parent) = cache_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(&cache_path, &bytes);
+            Some(bytes)
+        }
+        Err(e) => {
+            log::warn!("Failed to download avatar: {e}");
+            None
+        }
+    }
+}
+
+fn avatar_cache_path() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(|| PathBuf::from(".cache"))
+        .join("rpi-zero2w-strava-dash")
+        .join("avatar.img")
 }

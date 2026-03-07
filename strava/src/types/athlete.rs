@@ -32,6 +32,14 @@ pub struct DetailedAthlete {
     #[serde(default)]
     pub summit: bool,
 
+    /// URL to a 124×124 pixel profile picture
+    #[serde(default)]
+    pub profile: Option<String>,
+
+    /// URL to a 62×62 pixel profile picture
+    #[serde(default)]
+    pub profile_medium: Option<String>,
+
     /// The athlete's follower count
     #[serde(default)]
     pub follower_count: Option<u32>,
@@ -241,6 +249,8 @@ mod tests {
             country: None,
             premium: false,
             summit: false,
+            profile: None,
+            profile_medium: None,
             follower_count: None,
             friend_count: None,
             measurement_preference: None,

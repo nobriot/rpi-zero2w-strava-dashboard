@@ -120,6 +120,28 @@ impl Client {
         Ok(athlete)
     }
 
+    /// Download raw bytes from any URL (no authentication).
+    /// Used for fetching avatar images, etc.
+    pub fn download_bytes(&self, url: &str) -> Result<Vec<u8>, StravaError> {
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(StravaError::StravaApiResponseError(format!(
+                "Download failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let bytes = response
+            .bytes()
+            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+        Ok(bytes.to_vec())
+    }
+
     /// GET /athletes/{id}/stats — returns aggregate stats. Uses cache.
     pub fn get_athlete_stats(&mut self, athlete_id: u64) -> Result<AthleteStats, StravaError> {
         if let Some(cached) = self.cache.load::<AthleteStats>("stats") {
