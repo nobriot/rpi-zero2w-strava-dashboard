@@ -1,13 +1,14 @@
-# 🦀 RPi Zero 2W Strava Dash
+# RPi Zero 2W Strava Dash
 
-A Rust-based Strava dashboard for Raspberry Pi Zero 2W with Waveshare PhotoPainter e-paper display.
+A Strava dashboard for Raspberry Pi Zero 2W with Waveshare PhotoPainter
+e-paper display.
 
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ---
 
-## 🪶 What It Does
+## What It Does
 
 Displays your Strava stats on a beautiful 7.5" e-paper display:
 - **Distance, time, and activity count**
@@ -23,16 +24,15 @@ Displays your Strava stats on a beautiful 7.5" e-paper display:
 - **Raspberry Pi Zero 2W** (or any RPi with SPI)
 - **Waveshare 7.5" ACeP 7-Color E-Paper Display** (IT8951 controller)
 - **MicroSD card** (16GB+ recommended)
-- **Power supply** (5V 2.5A recommended)
+- **Power supply** (5V 2.5A recommended) or battery
 
 ---
 
-## 📦 Software Prerequisites
+## Software Prerequisites
 
 1. **Raspberry Pi OS** (64-bit recommended)
 2. **Rust** (stable toolchain, 1.93+)
-3. **Docker** (for cross-compilation only)
-4. **[cross](https://github.com/cross-rs/cross)** (for cross-compilation only)
+3. **[cross](https://github.com/cross-rs/cross)** (for cross-compilation only)
 
 ### Install Rust on your dev machine:
 
@@ -50,50 +50,40 @@ cargo install cross
 
 ---
 
-## 🚀 Installation
+##  Installation
 
-### 1. Clone the Repository
+### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/rpi-zero2w-strava-dash.git
+git clone https://github.com/nobriot/rpi-zero2w-strava-dash.git
 cd rpi-zero2w-strava-dash
 ```
 
-### 2. Configure
+### Get a Strava token
+
+Get the auth flow
+
+### Copy the generated configuration over to the RPi
 
 ```bash
 cp config.example.toml config.toml
 nano config.toml
 ```
 
-Fill in your:
-- WiFi credentials
-- Strava API credentials (see [docs/STRAVA_API.md](docs/STRAVA_API.md))
-- Display preferences
-
-### 3. Build
+### Build for RPi Zero 2w
 
 ```bash
-# Local debug build
-cargo build
-
-# Local release build
-cargo release
-
-# Cross-compile for Raspberry Pi Zero 2W (requires Docker + cross)
+# Cross-compile for Raspberry Pi Zero 2W (requires cross)
 cross build --release --target aarch64-unknown-linux-gnu
-
-# Run all tests
-cargo test-all
 ```
 
-### 4. Deploy to Raspberry Pi
+### Deploy to Raspberry Pi
 
 ```bash
 scp target/aarch64-unknown-linux-gnu/release/dashboard pi@<host>:~/
 ```
 
-### 5. Run
+### Run
 
 ```bash
 sudo ./target/release/rpi-zero2w-strava-dash
@@ -103,70 +93,29 @@ sudo ./target/release/rpi-zero2w-strava-dash
 
 ---
 
-## 🔧 Configuration
+## What it looks like
 
-See `config.example.toml` for all available options:
+TODO: Insert picture when I have one
 
-- **WiFi**: Network credentials
-- **Strava**: API credentials and sport type filter
-- **Display**: Refresh interval, tracking period, goals
-- **Hardware**: GPIO pin assignments
 
----
+It is possible to generate a PNG of what the frame looks like:
 
-## 📚 Documentation
+```bash
+rpi-zero2w-strava-dash --save-png frame.png
+```
 
-- [Hardware Setup Guide](docs/HARDWARE_SETUP.md)
-- [Strava API Setup](docs/STRAVA_API.md)
 
 ---
 
-## 🎯 Features
+## TODOs
 
-- ✅ Strava API integration with token refresh
-- ✅ Multiple sport types (Run, Ride, Swim, Hike, Walk)
-- ✅ Polyline route visualization
-- ✅ Weekly/Monthly/Yearly tracking periods
-- ✅ Goal progress tracking
-- ✅ Low-power e-paper display
-- ✅ Async Rust implementation
-- ✅ Robust error handling
-
----
-
-## 🔮 Roadmap
-
+- [ ] USB setup for the RPi ? (just install the USB listener, then connect, then we configure from the dev machine?)
 - [ ] Complete IT8951 display driver implementation
 - [ ] Advanced graphics rendering with fonts
-- [ ] Web interface for configuration
-- [ ] Multiple activity type support on single screen
-- [ ] Weather integration
 - [ ] systemd service setup
 
 ---
 
-## 🤝 Contributing
+## Credits
 
-Contributions welcome! Please open an issue or PR.
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file
-
----
-
-## 🙏 Credits
-
-Inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter) 🪶
-
-Built with:
-- [Tokio](https://tokio.rs/) - Async runtime
-- [reqwest](https://github.com/seanmonstar/reqwest) - HTTP client
-- [rppal](https://github.com/golemparts/rppal) - Raspberry Pi GPIO/SPI
-- [embedded-graphics](https://github.com/embedded-graphics/embedded-graphics) - Graphics library
-
----
-
-**Happy tracking!** 🏃‍♂️🦀
+Inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter)
