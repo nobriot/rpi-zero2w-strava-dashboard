@@ -3,7 +3,8 @@ use chrono::{Datelike, Utc};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
 use imageproc::rect::Rect;
-use strava::stats::DashboardStats;
+use strava::stats::{DashboardStats, SportSummary};
+use strava::types::SportType;
 
 use crate::ina219::BatteryStatus;
 
@@ -26,6 +27,17 @@ const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
 pub struct DisplayConfig {
     pub run_goal_km: f64,
     pub ride_goal_km: f64,
+    pub swim_goal_km: f64,
+}
+
+impl DisplayConfig {
+    fn goal_for(&self, sport: SportType) -> f64 {
+        match sport {
+            SportType::Run => self.run_goal_km,
+            SportType::Ride => self.ride_goal_km,
+            SportType::Swim => self.swim_goal_km,
+        }
+    }
 }
 
 impl Default for DisplayConfig {
@@ -33,7 +45,24 @@ impl Default for DisplayConfig {
         Self {
             run_goal_km: 2000.0,
             ride_goal_km: 5000.0,
+            swim_goal_km: 200.0,
         }
+    }
+}
+
+fn sport_accent(sport: SportType) -> Rgb<u8> {
+    match sport {
+        SportType::Run => RED,
+        SportType::Ride => BLUE,
+        SportType::Swim => GREEN,
+    }
+}
+
+fn sport_label(sport: SportType) -> &'static str {
+    match sport {
+        SportType::Run => "RUN",
+        SportType::Ride => "RIDE",
+        SportType::Swim => "SWIM",
     }
 }
 
@@ -48,11 +77,11 @@ pub fn render_dashboard(
     let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
 
-    draw_header(&mut img, &font_bold, stats, config, battery);
-    draw_distance_section(&mut img, &font, &font_bold, stats, config);
-    draw_stats_columns(&mut img, &font, &font_bold, stats);
-    draw_latest_activity(&mut img, &font, &font_bold, stats);
-    draw_polyline(&mut img, stats);
+    draw_header(&mut img, &font_bold, stats, battery);
+    let y = draw_sport_bars(&mut img, &font, &font_bold, stats, config);
+    let stats_y = draw_stats_row(&mut img, &font, &font_bold, stats, y);
+    draw_latest_activity(&mut img, &font, &font_bold, stats, stats_y);
+    draw_polyline(&mut img, stats, y);
 
     img
 }
@@ -61,7 +90,6 @@ fn draw_header(
     img: &mut RgbImage,
     font_bold: &FontRef,
     stats: &DashboardStats,
-    _config: &DisplayConfig,
     battery: Option<&BatteryStatus>,
 ) {
     let header_h = 60;
@@ -94,56 +122,41 @@ fn draw_header(
     }
 }
 
-fn draw_distance_section(
+/// Draw one goal bar per active sport. Returns the Y position after the last bar.
+fn draw_sport_bars(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
     stats: &DashboardStats,
     config: &DisplayConfig,
-) {
+) -> i32 {
     let margin = 24i32;
     let bar_w = (W as i32 - 2 * margin) as u32;
     let bar_h = 22u32;
+    let section_h = 58i32;
+    let mut y = 68i32;
 
-    // ── Running goal bar ──
-    let y = 72;
-    draw_goal_bar(
-        img,
-        font,
-        font_bold,
-        "🏃  RUN",
-        stats.ytd_run_distance_km,
-        config.run_goal_km,
-        margin,
-        y,
-        bar_w,
-        bar_h,
-        RED,
-    );
+    for summary in &stats.sports {
+        let accent = sport_accent(summary.sport);
+        let goal = config.goal_for(summary.sport);
+        let label = sport_label(summary.sport);
 
-    // ── Cycling goal bar ──
-    let y = y + 70;
-    draw_goal_bar(
-        img,
-        font,
-        font_bold,
-        "🚴  RIDE",
-        stats.ytd_ride_distance_km,
-        config.ride_goal_km,
-        margin,
-        y,
-        bar_w,
-        bar_h,
-        BLUE,
-    );
+        draw_single_bar(
+            img, font, font_bold, label, summary, goal, margin, y, bar_w, bar_h, accent,
+        );
+
+        y += section_h;
+    }
+
+    y + 6
 }
 
-fn draw_goal_bar(
+fn draw_single_bar(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
     label: &str,
-    current_km: f64,
+    summary: &SportSummary,
     goal_km: f64,
     margin: i32,
     y_start: i32,
@@ -151,8 +164,11 @@ fn draw_goal_bar(
     bar_h: u32,
     accent: Rgb<u8>,
 ) {
-    // Label + value on the same line
-    let value_text = format!("{}   {:.0} / {:.0} km", label, current_km, goal_km);
+    // Label + distance on the same line
+    let value_text = format!(
+        "{}   {:.0} / {:.0} km",
+        label, summary.ytd_distance_km, goal_km
+    );
     draw_text_mut(
         img,
         accent,
@@ -164,7 +180,7 @@ fn draw_goal_bar(
     );
 
     // Progress bar
-    let bar_y = (y_start + 24) as u32;
+    let bar_y = (y_start + 22) as u32;
 
     // Border
     draw_filled_rect_mut(
@@ -178,9 +194,9 @@ fn draw_goal_bar(
         WHITE,
     );
 
-    // Fill
+    // Fill (uses sport accent color)
     let pct = if goal_km > 0.0 {
-        (current_km / goal_km).min(1.0)
+        (summary.ytd_distance_km / goal_km).min(1.0)
     } else {
         0.0
     };
@@ -189,18 +205,24 @@ fn draw_goal_bar(
         draw_filled_rect_mut(
             img,
             Rect::at(margin + 2, bar_y as i32 + 2).of_size(fill_w, bar_h - 4),
-            GREEN,
+            accent,
         );
     }
 
-    // Percentage / remaining text
-    let pct_text = if current_km >= goal_km {
-        let above = current_km - goal_km;
-        format!("+{:.0} km above goal", above)
+    // Sub-text: percentage/progress + per-sport totals
+    let progress = if summary.ytd_distance_km >= goal_km {
+        format!("+{:.0} km above goal", summary.ytd_distance_km - goal_km)
     } else {
-        let km_to_go = goal_km - current_km;
-        format!("{:.1}%  ·  {:.0} km to go", pct * 100.0, km_to_go)
+        format!(
+            "{:.1}%  ·  {:.0} km to go",
+            pct * 100.0,
+            goal_km - summary.ytd_distance_km
+        )
     };
+    let sub_text = format!(
+        "{}  ·  {} activities  ·  {}",
+        progress, summary.ytd_count, summary.ytd_time_display
+    );
     draw_text_mut(
         img,
         BLACK,
@@ -208,17 +230,18 @@ fn draw_goal_bar(
         (bar_y + bar_h + 4) as i32,
         PxScale::from(14.0),
         font,
-        &pct_text,
+        &sub_text,
     );
 }
 
-fn draw_stats_columns(
+/// Draw the stats row (activities, kudos, last route label). Returns Y for next section.
+fn draw_stats_row(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
     stats: &DashboardStats,
-) {
-    let y_start = 225;
+    y_start: i32,
+) -> i32 {
     let margin = 24i32;
     let col_w = (W as i32 - 2 * margin) / 3;
 
@@ -232,18 +255,17 @@ fn draw_stats_columns(
         font_bold,
         "ACTIVITIES",
     );
-    let count = stats.activity_count();
     draw_text_mut(
         img,
         BLACK,
         margin,
-        y_start + 30,
+        y_start + 28,
         PxScale::from(22.0),
         font,
-        &count.to_string(),
+        &stats.activity_count().to_string(),
     );
 
-    // Column 2: Total time
+    // Column 2: Kudos
     let col2_x = margin + col_w;
     draw_text_mut(
         img,
@@ -252,19 +274,19 @@ fn draw_stats_columns(
         y_start,
         PxScale::from(20.0),
         font_bold,
-        "TIME",
+        "KUDOS",
     );
     draw_text_mut(
         img,
         BLACK,
         col2_x,
-        y_start + 30,
+        y_start + 28,
         PxScale::from(22.0),
         font,
-        &stats.total_time_display(),
+        &stats.total_kudos.to_string(),
     );
 
-    // Column 3: Last Route (polyline)
+    // Column 3: Last Route label (polyline drawn separately)
     let col3_x = margin + 2 * col_w;
     draw_text_mut(
         img,
@@ -275,9 +297,8 @@ fn draw_stats_columns(
         font_bold,
         "LAST ROUTE",
     );
-    // The polyline is drawn separately in draw_polyline()
-    // We just mark the area here
-    let _ = col3_x; // used in draw_polyline
+
+    y_start + 60
 }
 
 fn draw_latest_activity(
@@ -285,8 +306,8 @@ fn draw_latest_activity(
     font: &FontRef,
     font_bold: &FontRef,
     stats: &DashboardStats,
+    y_start: i32,
 ) {
-    let y_start = 320;
     let margin = 24i32;
 
     if let Some(ref last) = stats.last_activity {
@@ -386,19 +407,23 @@ fn draw_latest_activity(
     }
 }
 
-fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats) {
+fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, poly_y_start: i32) {
     let points = &stats.last_activity_polyline;
     if points.is_empty() {
         return;
     }
 
-    // Draw area: right third column
+    // Draw area: right third column, below stats row header
     let margin = 24u32;
     let col_w = (W - 2 * margin) / 3;
     let area_x = margin + 2 * col_w;
-    let area_y = 250u32;
+    let area_y = (poly_y_start + 28) as u32;
     let area_w = col_w - 10;
-    let area_h = H - area_y - 20;
+    let area_h = H.saturating_sub(area_y + 20);
+
+    if area_h < 20 {
+        return;
+    }
 
     // Find bounds
     let (mut min_lat, mut max_lat) = (f64::MAX, f64::MIN);

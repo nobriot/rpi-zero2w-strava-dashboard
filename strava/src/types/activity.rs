@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::athlete_stats::SportType;
+
 /// Summary activity from Strava API
 /// Endpoint: GET /athlete/activities
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -59,6 +61,10 @@ pub struct SummaryActivity {
     /// Whether this activity is marked as private
     #[serde(default)]
     pub private: bool,
+
+    /// The number of kudos received
+    #[serde(default)]
+    pub kudos_count: u32,
 }
 
 /// Map data from a Strava activity, containing an encoded polyline.
@@ -121,6 +127,32 @@ impl SummaryActivity {
 
     pub fn is_ride(&self) -> bool {
         self.activity_type.as_deref() == Some("Ride")
+    }
+
+    pub fn is_swim(&self) -> bool {
+        self.activity_type.as_deref() == Some("Swim")
+    }
+
+    /// Map activity type string to a `SportType` enum value.
+    pub fn sport(&self) -> Option<SportType> {
+        match self.activity_type.as_deref() {
+            Some("Run") => Some(SportType::Run),
+            Some("Ride") => Some(SportType::Ride),
+            Some("Swim") => Some(SportType::Swim),
+            _ => None,
+        }
+    }
+
+    /// Format pace as "M:SS /100m" (for swimming)
+    pub fn format_pace_per_100m(&self) -> String {
+        if self.distance > 0.0 {
+            let pace_secs = self.moving_time as f64 / (self.distance / 100.0);
+            let minutes = (pace_secs / 60.0).floor() as u32;
+            let seconds = (pace_secs % 60.0).round() as u32;
+            format!("{minutes}:{seconds:02} /100m")
+        } else {
+            "--:-- /100m".to_string()
+        }
     }
 
     /// Whether this activity is public and not a commute.

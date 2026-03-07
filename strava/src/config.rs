@@ -36,6 +36,10 @@ pub struct DisplayConfig {
     /// Yearly cycling goal in km (default: 5000)
     #[serde(default = "default_ride_goal")]
     pub ride_goal_km: f64,
+
+    /// Yearly swimming goal in km (default: 200)
+    #[serde(default = "default_swim_goal")]
+    pub swim_goal_km: f64,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -53,6 +57,9 @@ fn default_run_goal() -> f64 {
 fn default_ride_goal() -> f64 {
     5000.0
 }
+fn default_swim_goal() -> f64 {
+    200.0
+}
 
 impl Default for DisplayConfig {
     fn default() -> Self {
@@ -62,6 +69,7 @@ impl Default for DisplayConfig {
             quiet_end_hour: default_quiet_end(),
             run_goal_km: default_run_goal(),
             ride_goal_km: default_ride_goal(),
+            swim_goal_km: default_swim_goal(),
         }
     }
 }
@@ -102,6 +110,7 @@ refresh_token = "YOUR_REFRESH_TOKEN"
 # quiet_end_hour = 8
 # run_goal_km = 2000.0
 # ride_goal_km = 5000.0
+# swim_goal_km = 200.0
 "#;
             if let Err(e) = fs::write(&path, template) {
                 return Err(format!("Failed to write config template: {e}"));
