@@ -119,7 +119,7 @@ fn run() -> Result<()> {
 
 /// Run one full cycle: fetch stats → render image → display (or save PNG).
 fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
-    let (stats, avatar) = fetch_stats(config)?;
+    let (stats, avatar) = fetch_stats(config, args.show_all_sports)?;
 
     // Read battery status (non-fatal if unavailable)
     let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
@@ -157,8 +157,9 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 
     // Save PNG if requested
     if let Some(ref path) = args.save_png {
-        img.save(path)
-            .map_err(|e| DashError::Display(display::errors::DisplayError::Render(e.to_string())))?;
+        img.save(path).map_err(|e| {
+            DashError::Display(display::errors::DisplayError::Render(e.to_string()))
+        })?;
         log::info!("Dashboard saved to {path}");
     }
 
@@ -190,6 +191,7 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 /// Fetch Strava data and compute dashboard stats. Also fetches/caches the avatar.
 fn fetch_stats(
     config: &strava::config::Config,
+    show_all_sports: bool,
 ) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
     let mut client = strava::client::Client::new(config.clone());
     client.get_token()?;
@@ -218,7 +220,8 @@ fn fetch_stats(
     let dashboard = strava::stats::DashboardStats::compute(
         &stats,
         &activities,
-        &athlete.firstname.as_deref().unwrap_or("Athlete"),
+        athlete.firstname.as_deref().unwrap_or("Athlete"),
+        show_all_sports,
     );
 
     Ok((dashboard, avatar))

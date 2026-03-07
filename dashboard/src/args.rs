@@ -21,4 +21,8 @@ pub struct Args {
     /// Clear all cached data (athlete, stats, activities, avatar) and exit
     #[arg(long)]
     pub clear_cache: bool,
+
+    /// Show all sports (run/ride/swim) even if no activities exist (demo mode)
+    #[arg(long)]
+    pub show_all_sports: bool,
 }

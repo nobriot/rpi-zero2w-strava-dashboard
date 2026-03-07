@@ -6,9 +6,24 @@ pub struct SportSummary {
     pub sport: SportType,
     pub ytd_distance_km: f64,
     pub ytd_count: u32,
+    pub ytd_time_secs: f64,
     pub ytd_time_display: String,
     pub fastest: Option<ActivityHighlight>,
     pub longest: Option<ActivityHighlight>,
+}
+
+/// Best effort for a standard running race distance.
+/// Always present for each race bucket (5K, 10K, HM); fields are `None` when
+/// no matching activity exists.
+#[derive(Debug, Clone)]
+pub struct RunRaceBest {
+    pub label: &'static str,
+    pub target_km: f64,
+    pub distance_km: Option<f64>,
+    pub moving_time_display: Option<String>,
+    pub pace: Option<String>,
+    pub name: Option<String>,
+    pub date: Option<String>,
 }
 
 /// All the stats we want to display on the dashboard.
@@ -30,11 +45,21 @@ pub struct DashboardStats {
     pub total_kudos: u32,
     /// Decoded polyline points (lat, lon) from the last activity
     pub last_activity_polyline: Vec<(f64, f64)>,
+
+    /// Fastest run efforts at standard race distances (5K, 10K, HM)
+    pub run_race_bests: Vec<RunRaceBest>,
+    /// Total YTD distance across all active sports in km
+    pub total_distance_km: f64,
+    /// Total elevation gain across all activities in meters
+    pub total_elevation_gain_m: f64,
+    /// Include all sports in display even if zero activities (demo mode)
+    pub show_all_sports: bool,
 }
 
 /// A single activity highlighted for a specific reason (fastest, longest, last).
 #[derive(Debug, Clone)]
 pub struct ActivityHighlight {
+    pub sport: SportType,
     pub name: String,
     pub distance_km: f64,
     pub moving_time_display: String,
@@ -49,19 +74,23 @@ impl DashboardStats {
         stats: &AthleteStats,
         activities: &[SummaryActivity],
         athlete_first_name: &str,
+        show_all_sports: bool,
     ) -> Self {
         let all_sport_types = [SportType::Run, SportType::Ride, SportType::Swim];
 
         let sports: Vec<SportSummary> = all_sport_types
             .iter()
             .filter_map(|&sport| {
-                let ytd = stats.ytd_totals(sport)?;
-                if ytd.count == 0 {
+                let ytd = stats.ytd_totals(sport);
+                let count = ytd.map(|t| t.count).unwrap_or(0);
+                if count == 0 && !show_all_sports {
                     return None;
                 }
 
-                let sport_activities: Vec<&SummaryActivity> =
-                    activities.iter().filter(|a| a.sport() == Some(sport)).collect();
+                let sport_activities: Vec<&SummaryActivity> = activities
+                    .iter()
+                    .filter(|a| a.sport() == Some(sport))
+                    .collect();
 
                 let fastest = sport_activities
                     .iter()
@@ -82,11 +111,21 @@ impl DashboardStats {
                     })
                     .map(|a| to_highlight(a, sport));
 
+                let (distance_km, moving_time, time_display) = match ytd {
+                    Some(t) => (
+                        t.distance_km(),
+                        t.moving_time,
+                        format_duration_secs(t.moving_time),
+                    ),
+                    None => (0.0, 0.0, "0h 0m".to_string()),
+                };
+
                 Some(SportSummary {
                     sport,
-                    ytd_distance_km: ytd.distance_km(),
-                    ytd_count: ytd.count,
-                    ytd_time_display: format_duration_secs(ytd.moving_time),
+                    ytd_distance_km: distance_km,
+                    ytd_count: count,
+                    ytd_time_secs: moving_time,
+                    ytd_time_display: time_display,
                     fastest,
                     longest,
                 })
@@ -103,9 +142,13 @@ impl DashboardStats {
         let activity_count = activities.len();
         let total_moving_time_secs: u32 = activities.iter().map(|a| a.moving_time).sum();
         let total_kudos: u32 = activities.iter().map(|a| a.kudos_count).sum();
+        let total_elevation_gain_m: f64 = activities.iter().map(|a| a.total_elevation_gain).sum();
         let last_activity_polyline = last_eligible
             .map(|a| a.polyline_points())
             .unwrap_or_default();
+
+        let total_distance_km: f64 = sports.iter().map(|s| s.ytd_distance_km).sum();
+        let run_race_bests = compute_race_bests(activities);
 
         Self {
             sports,
@@ -115,6 +158,10 @@ impl DashboardStats {
             total_moving_time_secs,
             total_kudos,
             last_activity_polyline,
+            run_race_bests,
+            total_distance_km,
+            total_elevation_gain_m,
+            show_all_sports,
         }
     }
 
@@ -123,11 +170,17 @@ impl DashboardStats {
         self.activity_count
     }
 
-    /// Format total moving time as "Xh Ym"
+    /// Format total moving time as "Xd Yh Zm" (includes days when ≥24h)
     pub fn total_time_display(&self) -> String {
-        let hours = self.total_moving_time_secs / 3600;
-        let minutes = (self.total_moving_time_secs % 3600) / 60;
-        format!("{hours}h {minutes}m")
+        let total_secs = self.total_moving_time_secs;
+        let days = total_secs / 86400;
+        let hours = (total_secs % 86400) / 3600;
+        let minutes = (total_secs % 3600) / 60;
+        if days > 0 {
+            format!("{days}d {hours}h {minutes}m")
+        } else {
+            format!("{hours}h {minutes}m")
+        }
     }
 
     /// Look up YTD distance for a given sport (0.0 if not active).
@@ -141,7 +194,7 @@ impl DashboardStats {
 
     pub fn print_summary(&self) {
         println!("╔═══════════════════════════════════════════════════════╗");
-        println!("║              DASHBOARD STATS SUMMARY                 ║");
+        println!("║              DASHBOARD STATS SUMMARY                  ║");
         println!("╚═══════════════════════════════════════════════════════╝\n");
 
         for s in &self.sports {
@@ -169,7 +222,32 @@ impl DashboardStats {
         }
         println!();
 
-        println!("👍 Total Kudos: {}", self.total_kudos);
+        if !self.run_race_bests.is_empty() {
+            println!("🏁 Running Race Bests:");
+            for rb in &self.run_race_bests {
+                if let Some(ref pace) = rb.pace {
+                    println!(
+                        "  {} {} — \"{}\" ({})",
+                        rb.label,
+                        pace,
+                        rb.name.as_deref().unwrap_or("—"),
+                        rb.date.as_deref().unwrap_or("—")
+                    );
+                } else {
+                    println!("  {} —", rb.label);
+                }
+            }
+            println!();
+        }
+
+        println!(
+            "📊 Totals: {:.1} km · {} activities · {} · {:.0}m ↑ · {} kudos",
+            self.total_distance_km,
+            self.activity_count,
+            self.total_time_display(),
+            self.total_elevation_gain_m,
+            self.total_kudos
+        );
         println!();
 
         if let Some(ref a) = self.last_activity {
@@ -202,10 +280,64 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
         SportType::Swim => a.format_pace_per_100m(),
     };
     ActivityHighlight {
+        sport,
         name: a.name.clone().unwrap_or_else(|| "Unnamed".to_string()),
         distance_km: a.distance_km(),
         moving_time_display: a.format_moving_time(),
         pace_or_speed,
         date: format_date(&a.start_date_local),
     }
+}
+
+/// Race distance buckets for finding best running efforts.
+const RACE_BUCKETS: &[(&str, f64, f64, f64)] = &[
+    // (label, target_km, min_km, max_km)
+    ("5K", 5.0, 4.95, 5.5),
+    ("10K", 10.0, 9.9, 11.0),
+    ("HM", 21.1, 21.0, 23.2),
+];
+
+fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
+    let runs: Vec<&SummaryActivity> = activities
+        .iter()
+        .filter(|a| a.is_run() && a.distance > 0.0 && a.moving_time > 0)
+        .collect();
+
+    RACE_BUCKETS
+        .iter()
+        .map(|&(label, target_km, min_km, max_km)| {
+            let best = runs
+                .iter()
+                .filter(|a| {
+                    let km = a.distance_km();
+                    km >= min_km && km <= max_km
+                })
+                .max_by(|a, b| {
+                    a.average_speed
+                        .partial_cmp(&b.average_speed)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+            match best {
+                Some(b) => RunRaceBest {
+                    label,
+                    target_km,
+                    distance_km: Some(b.distance_km()),
+                    moving_time_display: Some(b.format_moving_time()),
+                    pace: Some(b.format_pace_per_km()),
+                    name: Some(b.name.clone().unwrap_or_else(|| "Unnamed".to_string())),
+                    date: Some(format_date(&b.start_date_local)),
+                },
+                None => RunRaceBest {
+                    label,
+                    target_km,
+                    distance_km: None,
+                    moving_time_display: None,
+                    pace: None,
+                    name: None,
+                    date: None,
+                },
+            }
+        })
+        .collect()
 }
