@@ -153,13 +153,21 @@ impl DashboardStats {
     }
 }
 
+fn format_date(raw: &Option<String>) -> String {
+    raw.as_deref()
+        .unwrap_or("")
+        .get(..10)
+        .unwrap_or("")
+        .to_string()
+}
+
 fn to_run_highlight(a: &SummaryActivity) -> ActivityHighlight {
     ActivityHighlight {
         name: a.name.clone().unwrap_or_else(|| "Unnamed".to_string()),
         distance_km: a.distance_km(),
         moving_time_display: a.format_moving_time(),
         pace_or_speed: a.format_pace_per_km(),
-        date: a.start_date_local.clone().unwrap_or_default(),
+        date: format_date(&a.start_date_local),
     }
 }
 
@@ -169,6 +177,6 @@ fn to_ride_highlight(a: &SummaryActivity) -> ActivityHighlight {
         distance_km: a.distance_km(),
         moving_time_display: a.format_moving_time(),
         pace_or_speed: format!("{:.1} km/h", a.avg_speed_kmh()),
-        date: a.start_date_local.clone().unwrap_or_default(),
+        date: format_date(&a.start_date_local),
     }
 }

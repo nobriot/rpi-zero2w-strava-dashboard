@@ -779,6 +779,39 @@ mod tests {
         assert!(total.avg_speed_kmh().is_none());
         assert_eq!(total.format_pace_per_km(), "--:-- /km");
     }
+
+    #[test]
+    fn test_decode_polyline() {
+        // Standard Google example: encodes (38.5, -120.2), (40.7, -120.95), (43.252, -126.453)
+        let points = decode_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@");
+        assert_eq!(points.len(), 3);
+        assert!((points[0].0 - 38.5).abs() < 0.001);
+        assert!((points[0].1 - (-120.2)).abs() < 0.001);
+        assert!((points[2].0 - 43.252).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_summary_activity_with_polyline() {
+        let json = r#"{
+            "id": 123,
+            "name": "Morning Run",
+            "type": "Run",
+            "distance": 10000.0,
+            "moving_time": 3000,
+            "elapsed_time": 3200,
+            "total_elevation_gain": 50.0,
+            "average_speed": 3.33,
+            "max_speed": 4.0,
+            "start_date_local": "2026-03-06T08:00:00Z",
+            "map": {
+                "summary_polyline": "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+            }
+        }"#;
+        let activity: SummaryActivity = serde_json::from_str(json).unwrap();
+        let points = activity.polyline_points();
+        assert_eq!(points.len(), 3);
+        assert!(activity.map.is_some());
+    }
 }
 
 #[cfg(test)]

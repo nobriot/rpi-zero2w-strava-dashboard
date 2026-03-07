@@ -24,15 +24,15 @@ const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
 
 /// Dashboard display configuration.
 pub struct DisplayConfig {
-    pub yearly_goal_km: f64,
-    pub sport_label: String,
+    pub run_goal_km: f64,
+    pub ride_goal_km: f64,
 }
 
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
-            yearly_goal_km: 1000.0,
-            sport_label: "RUNNING".into(),
+            run_goal_km: 2000.0,
+            ride_goal_km: 5000.0,
         }
     }
 }
@@ -101,54 +101,86 @@ fn draw_distance_section(
     stats: &DashboardStats,
     config: &DisplayConfig,
 ) {
-    let y_start = 75;
-    let margin = 24;
+    let margin = 24i32;
+    let bar_w = (W as i32 - 2 * margin) as u32;
+    let bar_h = 22u32;
 
-    // Label
-    draw_text_mut(
+    // ── Running goal bar ──
+    let y = 72;
+    draw_goal_bar(
         img,
-        RED,
-        margin,
-        y_start,
-        PxScale::from(22.0),
+        font,
         font_bold,
-        "DISTANCE",
+        "🏃  RUN",
+        stats.ytd_run_distance_km,
+        config.run_goal_km,
+        margin,
+        y,
+        bar_w,
+        bar_h,
+        RED,
     );
 
-    // Value
-    let total_km = stats.ytd_run_distance_km + stats.ytd_ride_distance_km;
-    let value_text = format!("{:.1} km / {:.0} km", total_km, config.yearly_goal_km);
+    // ── Cycling goal bar ──
+    let y = y + 70;
+    draw_goal_bar(
+        img,
+        font,
+        font_bold,
+        "🚴  RIDE",
+        stats.ytd_ride_distance_km,
+        config.ride_goal_km,
+        margin,
+        y,
+        bar_w,
+        bar_h,
+        BLUE,
+    );
+}
+
+fn draw_goal_bar(
+    img: &mut RgbImage,
+    font: &FontRef,
+    font_bold: &FontRef,
+    label: &str,
+    current_km: f64,
+    goal_km: f64,
+    margin: i32,
+    y_start: i32,
+    bar_w: u32,
+    bar_h: u32,
+    accent: Rgb<u8>,
+) {
+    // Label + value on the same line
+    let value_text = format!("{}   {:.0} / {:.0} km", label, current_km, goal_km);
     draw_text_mut(
         img,
-        BLACK,
+        accent,
         margin,
-        y_start + 30,
-        PxScale::from(20.0),
-        font,
+        y_start,
+        PxScale::from(18.0),
+        font_bold,
         &value_text,
     );
 
     // Progress bar
-    let bar_x = margin as u32;
-    let bar_y = (y_start + 60) as u32;
-    let bar_w = W - 2 * bar_x;
-    let bar_h = 28u32;
+    let bar_y = (y_start + 24) as u32;
 
     // Border
     draw_filled_rect_mut(
         img,
-        Rect::at(bar_x as i32, bar_y as i32).of_size(bar_w, bar_h),
+        Rect::at(margin, bar_y as i32).of_size(bar_w, bar_h),
         BLACK,
     );
     draw_filled_rect_mut(
         img,
-        Rect::at(bar_x as i32 + 2, bar_y as i32 + 2).of_size(bar_w - 4, bar_h - 4),
+        Rect::at(margin + 2, bar_y as i32 + 2).of_size(bar_w - 4, bar_h - 4),
         WHITE,
     );
 
     // Fill
-    let pct = if config.yearly_goal_km > 0.0 {
-        (total_km / config.yearly_goal_km).min(1.0)
+    let pct = if goal_km > 0.0 {
+        (current_km / goal_km).min(1.0)
     } else {
         0.0
     };
@@ -156,25 +188,25 @@ fn draw_distance_section(
     if fill_w > 0 {
         draw_filled_rect_mut(
             img,
-            Rect::at(bar_x as i32 + 2, bar_y as i32 + 2).of_size(fill_w, bar_h - 4),
+            Rect::at(margin + 2, bar_y as i32 + 2).of_size(fill_w, bar_h - 4),
             GREEN,
         );
     }
 
-    // Percentage text
-    let km_to_go = (config.yearly_goal_km - total_km).max(0.0);
-    let pct_text = if total_km > config.yearly_goal_km {
-        let above = total_km - config.yearly_goal_km;
-        format!("+{:.1} km above goal", above)
+    // Percentage / remaining text
+    let pct_text = if current_km >= goal_km {
+        let above = current_km - goal_km;
+        format!("+{:.0} km above goal", above)
     } else {
-        format!("{:.1}%  ·  {:.1} km to go", pct * 100.0, km_to_go)
+        let km_to_go = goal_km - current_km;
+        format!("{:.1}%  ·  {:.0} km to go", pct * 100.0, km_to_go)
     };
     draw_text_mut(
         img,
         BLACK,
         margin,
-        (bar_y + bar_h + 6) as i32,
-        PxScale::from(16.0),
+        (bar_y + bar_h + 4) as i32,
+        PxScale::from(14.0),
         font,
         &pct_text,
     );
@@ -186,7 +218,7 @@ fn draw_stats_columns(
     font_bold: &FontRef,
     stats: &DashboardStats,
 ) {
-    let y_start = 205;
+    let y_start = 225;
     let margin = 24i32;
     let col_w = (W as i32 - 2 * margin) / 3;
 
@@ -254,7 +286,7 @@ fn draw_latest_activity(
     font_bold: &FontRef,
     stats: &DashboardStats,
 ) {
-    let y_start = 310;
+    let y_start = 320;
     let margin = 24i32;
 
     if let Some(ref last) = stats.last_activity {
@@ -364,7 +396,7 @@ fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats) {
     let margin = 24u32;
     let col_w = (W - 2 * margin) / 3;
     let area_x = margin + 2 * col_w;
-    let area_y = 230u32;
+    let area_y = 250u32;
     let area_w = col_w - 10;
     let area_h = H - area_y - 20;
 

@@ -123,8 +123,8 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 
     // Render
     let display_config = display::renderer::DisplayConfig {
-        yearly_goal_km: config.display.yearly_goal_km,
-        sport_label: config.display.sport_type.to_uppercase(),
+        run_goal_km: config.display.run_goal_km,
+        ride_goal_km: config.display.ride_goal_km,
     };
     let img = display::renderer::render_dashboard(&stats, battery.as_ref(), &display_config);
 
