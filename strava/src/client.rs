@@ -143,7 +143,12 @@ impl Client {
     /// GET /athlete/activities — paginated fetch of activities since `after` (unix timestamp).
     /// Uses cache.
     pub fn get_activities(&mut self, after: i64) -> Result<Vec<SummaryActivity>, StravaError> {
-        if let Some(cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
+        if let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
+            cached.sort_by(|a, b| {
+                b.start_date_local
+                    .as_deref()
+                    .cmp(&a.start_date_local.as_deref())
+            });
             return Ok(cached);
         }
 
@@ -181,6 +186,14 @@ impl Client {
 
         self.cache
             .save("activities", &all_activities, Some(3 * 3600));
+
+        // Sort newest-first (the API with `after` returns oldest-first)
+        all_activities.sort_by(|a, b| {
+            b.start_date_local
+                .as_deref()
+                .cmp(&a.start_date_local.as_deref())
+        });
+
         Ok(all_activities)
     }
 }

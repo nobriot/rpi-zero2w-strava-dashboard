@@ -1,0 +1,232 @@
+use serde::Deserialize;
+use serde::Serialize;
+
+/// Summary activity from Strava API
+/// Endpoint: GET /athlete/activities
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SummaryActivity {
+    /// The unique identifier of the activity
+    pub id: u64,
+
+    /// The name of the activity
+    #[serde(default)]
+    pub name: Option<String>,
+
+    /// The activity type (Run, Ride, Swim, etc.)
+    #[serde(rename = "type", default)]
+    pub activity_type: Option<String>,
+
+    /// The activity's distance in meters
+    #[serde(default)]
+    pub distance: f64,
+
+    /// The activity's moving time in seconds
+    #[serde(default)]
+    pub moving_time: u32,
+
+    /// The activity's elapsed time in seconds
+    #[serde(default)]
+    pub elapsed_time: u32,
+
+    /// The activity's total elevation gain in meters
+    #[serde(default)]
+    pub total_elevation_gain: f64,
+
+    /// The activity's average speed in meters per second
+    #[serde(default)]
+    pub average_speed: f64,
+
+    /// The activity's max speed in meters per second
+    #[serde(default)]
+    pub max_speed: f64,
+
+    /// The start date of the activity (ISO 8601)
+    #[serde(default)]
+    pub start_date: Option<String>,
+
+    /// The start date of the activity in local timezone (ISO 8601)
+    #[serde(default)]
+    pub start_date_local: Option<String>,
+
+    /// Map with summary polyline for route visualization
+    #[serde(default)]
+    pub map: Option<PolylineMap>,
+
+    /// Whether this activity is flagged as a commute
+    #[serde(default)]
+    pub commute: bool,
+
+    /// Whether this activity is marked as private
+    #[serde(default)]
+    pub private: bool,
+}
+
+/// Map data from a Strava activity, containing an encoded polyline.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PolylineMap {
+    /// Google-encoded polyline of the activity route
+    #[serde(default)]
+    pub summary_polyline: Option<String>,
+}
+
+impl SummaryActivity {
+    /// Distance in kilometers
+    pub fn distance_km(&self) -> f64 {
+        self.distance / 1000.0
+    }
+
+    /// Average speed in km/h
+    pub fn avg_speed_kmh(&self) -> f64 {
+        self.average_speed * 3.6
+    }
+
+    /// Average pace in min/km (for running)
+    pub fn avg_pace_min_per_km(&self) -> Option<f64> {
+        if self.distance > 0.0 {
+            Some((self.moving_time as f64 / 60.0) / (self.distance / 1000.0))
+        } else {
+            None
+        }
+    }
+
+    /// Format pace as "M:SS /km"
+    pub fn format_pace_per_km(&self) -> String {
+        if let Some(pace) = self.avg_pace_min_per_km() {
+            let minutes = pace.floor() as u32;
+            let seconds = ((pace - minutes as f64) * 60.0).round() as u32;
+            format!("{minutes}:{seconds:02} /km")
+        } else {
+            "--:-- /km".to_string()
+        }
+    }
+
+    /// Format moving time as "Xh Ym Zs"
+    pub fn format_moving_time(&self) -> String {
+        let hours = self.moving_time / 3600;
+        let minutes = (self.moving_time % 3600) / 60;
+        let seconds = self.moving_time % 60;
+
+        if hours > 0 {
+            format!("{hours}h {minutes}m {seconds}s")
+        } else if minutes > 0 {
+            format!("{minutes}m {seconds}s")
+        } else {
+            format!("{seconds}s")
+        }
+    }
+
+    pub fn is_run(&self) -> bool {
+        self.activity_type.as_deref() == Some("Run")
+    }
+
+    pub fn is_ride(&self) -> bool {
+        self.activity_type.as_deref() == Some("Ride")
+    }
+
+    /// Whether this activity is public and not a commute.
+    pub fn can_be_displayed(&self) -> bool {
+        !self.commute && !self.private
+    }
+
+    /// Get the decoded polyline points as (lat, lon) pairs.
+    pub fn polyline_points(&self) -> Vec<(f64, f64)> {
+        self.map
+            .as_ref()
+            .and_then(|m| m.summary_polyline.as_deref())
+            .map(decode_polyline)
+            .unwrap_or_default()
+    }
+}
+
+/// Decode a Google Encoded Polyline into a list of (latitude, longitude) pairs.
+/// See: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+pub fn decode_polyline(encoded: &str) -> Vec<(f64, f64)> {
+    let mut points = Vec::new();
+    let mut lat: i64 = 0;
+    let mut lng: i64 = 0;
+    let bytes = encoded.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        let (dlat, next) = decode_value(bytes, i);
+        i = next;
+        lat += dlat;
+
+        if i >= bytes.len() {
+            break;
+        }
+
+        let (dlng, next) = decode_value(bytes, i);
+        i = next;
+        lng += dlng;
+
+        points.push((lat as f64 / 1e5, lng as f64 / 1e5));
+    }
+
+    points
+}
+
+fn decode_value(bytes: &[u8], start: usize) -> (i64, usize) {
+    let mut result: i64 = 0;
+    let mut shift = 0;
+    let mut i = start;
+
+    loop {
+        if i >= bytes.len() {
+            break;
+        }
+        let b = (bytes[i] as i64) - 63;
+        i += 1;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+        if b < 0x20 {
+            break;
+        }
+    }
+
+    if result & 1 != 0 {
+        result = !(result >> 1);
+    } else {
+        result >>= 1;
+    }
+
+    (result, i)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_polyline() {
+        // Standard Google example: encodes (38.5, -120.2), (40.7, -120.95), (43.252, -126.453)
+        let points = decode_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@");
+        assert_eq!(points.len(), 3);
+        assert!((points[0].0 - 38.5).abs() < 0.001);
+        assert!((points[0].1 - (-120.2)).abs() < 0.001);
+        assert!((points[2].0 - 43.252).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_summary_activity_with_polyline() {
+        let json = r#"{
+            "id": 123,
+            "name": "Morning Run",
+            "type": "Run",
+            "distance": 10000.0,
+            "moving_time": 3000,
+            "elapsed_time": 3200,
+            "total_elevation_gain": 50.0,
+            "average_speed": 3.33,
+            "max_speed": 4.0,
+            "start_date_local": "2026-03-06T08:00:00Z",
+            "map": {
+                "summary_polyline": "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+            }
+        }"#;
+        let activity: SummaryActivity = serde_json::from_str(json).unwrap();
+        let points = activity.polyline_points();
+        assert_eq!(points.len(), 3);
+        assert!(activity.map.is_some());
+    }
+}
