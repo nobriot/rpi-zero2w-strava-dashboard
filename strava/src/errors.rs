@@ -16,4 +16,7 @@ pub enum StravaError {
 
     #[error("OAuth flow error: {0}")]
     OAuthError(String),
+
+    #[error("Network unavailable: {0}")]
+    NetworkUnavailable(String),
 }

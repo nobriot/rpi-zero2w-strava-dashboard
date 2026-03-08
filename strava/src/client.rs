@@ -40,7 +40,7 @@ impl Client {
                 ("scope", "read,activity:read_all"),
             ])
             .send()
-            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+            .map_err(Self::classify_reqwest_error)?;
 
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             return Err(StravaError::Unauthorized);
@@ -61,11 +61,22 @@ impl Client {
             .map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
 
         self.access_token = Some(token_response.access_token);
+
+        // Persist updated refresh token if it changed
+        if token_response.refresh_token != self.config.refresh_token() {
+            log::info!("Refresh token changed, updating config");
+            self.config.set_refresh_token(token_response.refresh_token);
+            if let Err(e) = self.config.save() {
+                log::warn!("Failed to save updated refresh token: {e}");
+            }
+        }
+
         log::info!("Access token obtained");
         Ok(())
     }
 
-    /// Sends a GET request to the Strava API using the token from this client.
+    /// Sends a GET request to the Strava API.
+    /// On 401, automatically retries once after refreshing the access token.
     fn strava_api_get(
         &mut self,
         api_endpoint: &str,
@@ -74,8 +85,27 @@ impl Client {
             self.get_token()?;
         }
 
-        let response = self
-            .client
+        let response = self.do_api_get(api_endpoint)?;
+
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            log::info!("Got 401, attempting automatic token refresh");
+            self.access_token = None;
+            self.get_token()?;
+            let retry = self.do_api_get(api_endpoint)?;
+
+            if retry.status() == reqwest::StatusCode::UNAUTHORIZED {
+                return Err(StravaError::Unauthorized);
+            }
+
+            return Self::check_response(retry, api_endpoint);
+        }
+
+        Self::check_response(response, api_endpoint)
+    }
+
+    /// Low-level GET request (no retry logic).
+    fn do_api_get(&self, api_endpoint: &str) -> Result<reqwest::blocking::Response, StravaError> {
+        self.client
             .get(format!("{}{}", Self::STRAVA_API_BASE_URL, api_endpoint))
             .header(
                 "Authorization",
@@ -83,12 +113,14 @@ impl Client {
             )
             .header("Accept", "application/json")
             .send()
-            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+            .map_err(Self::classify_reqwest_error)
+    }
 
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(StravaError::Unauthorized);
-        }
-
+    /// Check a non-401 response for success.
+    fn check_response(
+        response: reqwest::blocking::Response,
+        api_endpoint: &str,
+    ) -> Result<reqwest::blocking::Response, StravaError> {
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().unwrap_or(String::from(""));
@@ -97,7 +129,6 @@ impl Client {
                 api_endpoint, status, text
             )));
         }
-
         Ok(response)
     }
 
@@ -127,7 +158,7 @@ impl Client {
             .client
             .get(url)
             .send()
-            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+            .map_err(Self::classify_reqwest_error)?;
 
         if !response.status().is_success() {
             return Err(StravaError::StravaApiResponseError(format!(
@@ -217,5 +248,22 @@ impl Client {
         });
 
         Ok(all_activities)
+    }
+
+    /// Classify a reqwest error as NetworkUnavailable when it's a connectivity issue.
+    fn classify_reqwest_error(e: reqwest::Error) -> StravaError {
+        if e.is_connect() || e.is_timeout() {
+            StravaError::NetworkUnavailable(e.to_string())
+        } else if e.is_request() {
+            // DNS resolution failures and similar come through as request errors
+            let msg = e.to_string().to_lowercase();
+            if msg.contains("dns") || msg.contains("resolve") || msg.contains("no address") {
+                StravaError::NetworkUnavailable(e.to_string())
+            } else {
+                StravaError::StravaApiResponseError(e.to_string())
+            }
+        } else {
+            StravaError::StravaApiResponseError(e.to_string())
+        }
     }
 }

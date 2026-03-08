@@ -1,5 +1,5 @@
 [workspace]
 resolver = "3"
-members = ["dashboard", "strava", "display"]
+members = ["dashboard", "strava", "display", "protocol", "usbd", "console"]
 default-members = [ "dashboard" ]
 rust-version = "1.93"

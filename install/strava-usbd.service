@@ -1,0 +1,15 @@
+[Unit]
+Description=Strava Dashboard USB Daemon
+After=network.target
+After=dev-ttyGS0.device
+Wants=dev-ttyGS0.device
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/strava-usbd
+Restart=always
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

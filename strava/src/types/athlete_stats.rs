@@ -242,10 +242,11 @@ impl AthleteStats {
 
             if matches!(sport, SportType::Run) {
                 println!("    Avg Pace:   {}", ytd.format_pace_per_km());
-            } else if matches!(sport, SportType::Ride) && let Some(speed) = ytd.avg_speed_kmh() {
-                    println!("    Avg Speed:  {:.1} km/h", speed);
-                }
-            
+            } else if matches!(sport, SportType::Ride)
+                && let Some(speed) = ytd.avg_speed_kmh()
+            {
+                println!("    Avg Speed:  {:.1} km/h", speed);
+            }
         } else {
             println!("  Year to Date: No data");
         }

@@ -160,8 +160,8 @@ refresh_token = "YOUR_REFRESH_TOKEN"
 
     /// Save the current config back to disk.
     pub fn save(&self) -> Result<(), String> {
-        let toml_string = toml::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize config: {e}"))?;
+        let toml_string =
+            toml::to_string_pretty(self).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
         let contents = format!(
             "# Strava API credentials\n# See docs/strava.md for setup instructions\n\n{toml_string}"
@@ -199,5 +199,19 @@ refresh_token = "YOUR_REFRESH_TOKEN"
 
         log::info!("Loaded config (for auth) from {}", path.display());
         Ok(config)
+    }
+
+    /// Parse a Config from a TOML string (no file I/O).
+    pub fn from_toml(toml_str: &str) -> Result<Self, String> {
+        toml::from_str(toml_str).map_err(|e| format!("Failed to parse TOML: {e}"))
+    }
+
+    /// Serialize the Config to a TOML string.
+    pub fn to_toml(&self) -> Result<String, String> {
+        let toml_string =
+            toml::to_string_pretty(self).map_err(|e| format!("Failed to serialize config: {e}"))?;
+        Ok(format!(
+            "# Strava API credentials\n# See docs/strava.md for setup instructions\n\n{toml_string}"
+        ))
     }
 }

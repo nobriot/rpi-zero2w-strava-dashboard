@@ -1,4 +1,4 @@
-use clap::{builder::styling, CommandFactory, FromArgMatches};
+use clap::{CommandFactory, FromArgMatches, builder::styling};
 
 mod errors;
 use errors::Result;
@@ -89,16 +89,47 @@ fn run() -> Result<()> {
         match try_cycle(&config, &args) {
             Ok(()) => {}
             Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
-                log::warn!("Unauthorized — attempting OAuth re-authorization");
-                eprintln!("\nReceived 401 Unauthorized. Starting OAuth authorization flow...");
+                // Token refresh already attempted by the client.
+                // If we still get Unauthorized, the refresh token is invalid — need full OAuth.
+                log::warn!(
+                    "Unauthorized after auto-refresh — attempting full OAuth re-authorization"
+                );
+                eprintln!("\nRefresh token invalid. Starting OAuth authorization flow...");
 
                 let token_response = strava::oauth::run_auth_flow(&config)?;
                 config.set_refresh_token(token_response.refresh_token);
                 config.save().map_err(errors::DashError::Config)?;
 
-                // Retry once after re-auth
                 if let Err(e) = try_cycle(&config, &args) {
                     eprintln!("Error after re-authorization: {e:?}");
+                }
+            }
+            Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
+                log::warn!("Network unavailable: {msg}");
+                eprintln!("Network unavailable — will retry next cycle");
+
+                // Read battery status (non-fatal)
+                let battery = display::ina219::Ina219::new()
+                    .and_then(|mut ina| ina.read_status())
+                    .ok();
+
+                let img = display::renderer::render_offline_dashboard(battery.as_ref());
+
+                if let Some(ref path) = args.save_png {
+                    let _ = img.save(path);
+                }
+
+                match display::epd7in3e::Epd7in3e::new() {
+                    Ok(mut epd) => {
+                        let buf = display::palette::quantize_to_epd_buffer(&img);
+                        let _ = epd.display_image(&buf);
+                        let _ = epd.sleep();
+                    }
+                    Err(_) => {
+                        if args.save_png.is_none() {
+                            let _ = img.save("dashboard_offline.png");
+                        }
+                    }
                 }
             }
             Err(e) => {

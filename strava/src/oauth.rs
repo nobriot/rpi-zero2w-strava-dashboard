@@ -98,11 +98,7 @@ fn wait_for_callback(listener: &TcpListener) -> Result<String, StravaError> {
 fn extract_query_param(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|pair| {
         let (k, v) = pair.split_once('=')?;
-        if k == key {
-            Some(v.to_string())
-        } else {
-            None
-        }
+        if k == key { Some(v.to_string()) } else { None }
     })
 }
 
