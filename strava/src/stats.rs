@@ -421,7 +421,7 @@ mod tests {
         let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
 
         assert_eq!(ten_k.name.as_deref(), Some("Exact 10K"));
-        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 0s"));
+        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 00s"));
     }
 
     #[test]
@@ -457,7 +457,7 @@ mod tests {
         let results = compute_race_bests(&[run]);
         let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
 
-        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 0s"));
+        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 00s"));
         assert_eq!(ten_k.pace.as_deref(), Some("5:00 /km"));
     }
 }

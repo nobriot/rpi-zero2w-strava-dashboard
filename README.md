@@ -147,6 +147,7 @@ Config file: `~/.config/rpi-zero2w-strava-dash/config.toml`
 
 ```toml
 # Strava API credentials
+[strava]
 client_id = "YOUR_CLIENT_ID"
 client_secret = "YOUR_CLIENT_SECRET"
 refresh_token = "YOUR_REFRESH_TOKEN"

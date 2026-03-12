@@ -125,6 +125,7 @@ fn setup_config(conn: &mut Connection) {
 
     let toml_content = format!(
         r#"# Strava API credentials
+[strava]
 client_id = "{client_id}"
 client_secret = "{client_secret}"
 refresh_token = "PLACEHOLDER"

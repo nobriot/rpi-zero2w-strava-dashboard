@@ -1,0 +1,32 @@
+# Strava Dashboard — Example Configuration
+#
+# Copy this file to ~/.config/rpi-zero2w-strava-dash/config.toml
+# and fill in your Strava API credentials.
+#
+# Create a Strava API app at https://www.strava.com/settings/api
+# See docs/strava.md for detailed setup instructions.
+
+# ── Strava API credentials (required) ────────────────────────────────────────
+
+[strava]
+client_id = "YOUR_CLIENT_ID"
+client_secret = "YOUR_CLIENT_SECRET"
+refresh_token = "YOUR_REFRESH_TOKEN"
+
+# ── Display & scheduling settings (all optional) ─────────────────────────────
+
+[display]
+
+# How often to refresh the dashboard (seconds). Default: 10800 (3 hours)
+# sleep_interval_secs = 10800
+
+# Quiet hours — no refresh between these hours (0–23, local time).
+# Default: 20:00–08:00
+# quiet_start_hour = 20
+# quiet_end_hour = 8
+
+# Yearly distance goals (km). Used for progress bars on the dashboard.
+# Default: 2000 km run, 5000 km ride, 200 km swim
+# run_goal_km = 2000.0
+# ride_goal_km = 5000.0
+# swim_goal_km = 200.0

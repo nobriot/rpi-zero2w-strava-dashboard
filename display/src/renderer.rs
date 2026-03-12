@@ -171,13 +171,7 @@ pub fn render_offline_dashboard(battery: Option<&BatteryStatus>) -> RgbImage {
 
     // Battery icon if available
     if let Some(bat) = battery {
-        icons::draw_battery(
-            &mut img,
-            (W - 70) as u32,
-            16,
-            WHITE,
-            bat.percentage as f32 / 100.0,
-        );
+        icons::draw_battery(&mut img, W - 70, 16, WHITE, bat.percentage as f32 / 100.0);
     }
 
     // Centered offline message

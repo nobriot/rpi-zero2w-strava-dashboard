@@ -63,6 +63,7 @@ protocol (lib)
 TOML config at `~/.config/rpi-zero2w-strava-dash/config.toml`:
 
 ```toml
+[strava]
 client_id = "..."
 client_secret = "..."
 refresh_token = "..."

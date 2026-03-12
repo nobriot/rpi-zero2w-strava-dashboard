@@ -3,15 +3,28 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
+const CONFIG_EXAMPLE: &str = include_str!("../../config.example.toml");
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
-    client_id: String,
-    client_secret: String,
-    refresh_token: String,
+    /// Strava API credentials
+    #[serde(default)]
+    pub strava: StravaConfig,
 
     /// Display and dashboard settings (optional section)
     #[serde(default)]
     pub display: DisplayConfig,
+}
+
+/// Strava API credentials.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct StravaConfig {
+    #[serde(default)]
+    client_id: String,
+    #[serde(default)]
+    client_secret: String,
+    #[serde(default)]
+    refresh_token: String,
 }
 
 /// Display and scheduling configuration.
@@ -52,13 +65,13 @@ fn default_quiet_end() -> u32 {
     8
 }
 fn default_run_goal() -> f64 {
-    2000.0
+    800.0
 }
 fn default_ride_goal() -> f64 {
     5000.0
 }
 fn default_swim_goal() -> f64 {
-    200.0
+    30.0
 }
 
 impl Default for DisplayConfig {
@@ -97,22 +110,7 @@ impl Config {
                 return Err(format!("Failed to create config directory: {e}"));
             }
 
-            let template = r#"# Strava API credentials
-# See docs/strava.md for setup instructions
-client_id = "YOUR_CLIENT_ID"
-client_secret = "YOUR_CLIENT_SECRET"
-refresh_token = "YOUR_REFRESH_TOKEN"
-
-# Display settings (all optional, shown with defaults)
-# [display]
-# sleep_interval_secs = 10800  # 3 hours
-# quiet_start_hour = 20        # no refresh between 20:00 and 08:00
-# quiet_end_hour = 8
-# run_goal_km = 2000.0
-# ride_goal_km = 5000.0
-# swim_goal_km = 200.0
-"#;
-            if let Err(e) = fs::write(&path, template) {
+            if let Err(e) = fs::write(&path, CONFIG_EXAMPLE) {
                 return Err(format!("Failed to write config template: {e}"));
             }
 
@@ -128,9 +126,10 @@ refresh_token = "YOUR_REFRESH_TOKEN"
         let config: Config = toml::from_str(&contents)
             .map_err(|e| format!("Failed to parse config file {}: {e}", path.display()))?;
 
-        if config.client_id == "YOUR_CLIENT_ID"
-            || config.client_secret == "YOUR_CLIENT_SECRET"
-            || config.refresh_token == "YOUR_REFRESH_TOKEN"
+        if config.strava.client_id == "YOUR_CLIENT_ID"
+            || config.strava.client_secret == "YOUR_CLIENT_SECRET"
+            || config.strava.refresh_token == "YOUR_REFRESH_TOKEN"
+            || config.strava.client_id.is_empty()
         {
             return Err(format!(
                 "Please fill in your Strava API credentials in: {}",
@@ -143,19 +142,19 @@ refresh_token = "YOUR_REFRESH_TOKEN"
     }
 
     pub fn client_id(&self) -> &str {
-        &self.client_id
+        &self.strava.client_id
     }
 
     pub fn client_secret(&self) -> &str {
-        &self.client_secret
+        &self.strava.client_secret
     }
 
     pub fn refresh_token(&self) -> &str {
-        &self.refresh_token
+        &self.strava.refresh_token
     }
 
     pub fn set_refresh_token(&mut self, token: String) {
-        self.refresh_token = token;
+        self.strava.refresh_token = token;
     }
 
     /// Save the current config back to disk.
@@ -190,7 +189,10 @@ refresh_token = "YOUR_REFRESH_TOKEN"
         let config: Config = toml::from_str(&contents)
             .map_err(|e| format!("Failed to parse config file {}: {e}", path.display()))?;
 
-        if config.client_id == "YOUR_CLIENT_ID" || config.client_secret == "YOUR_CLIENT_SECRET" {
+        if config.strava.client_id == "YOUR_CLIENT_ID"
+            || config.strava.client_secret == "YOUR_CLIENT_SECRET"
+            || config.strava.client_id.is_empty()
+        {
             return Err(format!(
                 "Please fill in your client_id and client_secret in: {}",
                 path.display()
