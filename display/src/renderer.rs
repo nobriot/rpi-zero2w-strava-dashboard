@@ -339,7 +339,7 @@ fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
 // --- Sport Goal Bars ---
 //
 // Layout per bar:
-//   [icon] RUN 234km    18.1% · 14h 22m · 27 runs    🏁 2000km
+//   [icon] RUN 234km   14h 22m · 27 runs    🏁 2000km
 //   [======================== bar ========================]
 
 fn draw_sport_bars(
@@ -393,7 +393,7 @@ fn draw_sport_bars(
             &goal_text,
         );
 
-        // Center: "18.1% · 14h 22m · 27 runs"
+        // Center: "14h 22m · 27 runs"
         let center_text = if summary.ytd_distance_km >= goal {
             format!(
                 "+{:.0}km  ·  {}  ·  {} {}",
@@ -404,11 +404,8 @@ fn draw_sport_bars(
             )
         } else {
             format!(
-                "{:.1}%  ·  {}  ·  {} {}",
-                pct * 100.0,
-                summary.ytd_time_display,
-                summary.ytd_count,
-                noun
+                "{}  ·  {} {}",
+                summary.ytd_time_display, summary.ytd_count, noun
             )
         };
         let left_end = MARGIN + ICON_SZ as i32 + 6 + approx_text_width(&left_text, 16) + 12;

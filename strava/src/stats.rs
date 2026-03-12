@@ -272,9 +272,9 @@ fn format_duration_secs(secs: f64) -> String {
     let hours = (secs / 3600.0) as u32;
     let minutes = ((secs % 3600.0) / 60.0) as u32;
     if days > 0 {
-        format!("{days}d {hours}h {minutes}m")
+        format!("{days}d {hours}h {minutes:02}m")
     } else {
-        format!("{hours}h {minutes}m")
+        format!("{hours}h {minutes:02}m")
     }
 }
 
@@ -362,9 +362,9 @@ fn format_estimated_time(secs: f64) -> String {
     let minutes = (total % 3600) / 60;
     let seconds = total % 60;
     if hours > 0 {
-        format!("{hours}h {minutes}m {seconds}s")
+        format!("{hours}h {minutes:02}m {seconds:02}s")
     } else if minutes > 0 {
-        format!("{minutes}m {seconds}s")
+        format!("{minutes}m {seconds:02}s")
     } else {
         format!("{seconds}s")
     }
