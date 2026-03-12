@@ -268,9 +268,14 @@ fn format_date(raw: &Option<String>) -> String {
 }
 
 fn format_duration_secs(secs: f64) -> String {
+    let days = (secs / 24.0 / 3600.0) as u32;
     let hours = (secs / 3600.0) as u32;
     let minutes = ((secs % 3600.0) / 60.0) as u32;
-    format!("{hours}h {minutes}m")
+    if days > 0 {
+        format!("{days}d {hours}h {minutes}m")
+    } else {
+        format!("{hours}h {minutes}m")
+    }
 }
 
 fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {

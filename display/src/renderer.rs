@@ -1,4 +1,4 @@
-use ab_glyph::{FontRef, PxScale};
+use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
@@ -480,6 +480,7 @@ fn draw_totals_row(
     stats: &DashboardStats,
     y_start: i32,
 ) -> i32 {
+    const TOTALS: &str = "TOTALS";
     let content_w = (W as i32 - 2 * MARGIN) as u32;
 
     // Extra space before separator
@@ -490,48 +491,38 @@ fn draw_totals_row(
         LIGHT_GRAY,
     );
 
-    let y = sep_y + 8;
-
-    let full_text = format!(
-        "TOTALS   {} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
-        stats.activity_count,
-        stats.total_distance_km,
-        stats.total_time_display(),
-        stats.total_elevation_gain_m,
-        stats.total_kudos,
-    );
-
     // "TOTALS" in orange, rest in black — centered as a single line
-    let full_w = approx_text_width(&full_text, 16);
-    let start_x = ((W as i32 - full_w) / 2).max(MARGIN);
-
+    let y = sep_y + 8;
     draw_text_mut(
         img,
         ORANGE,
-        start_x,
+        MARGIN,
         y,
-        PxScale::from(16.0),
+        PxScale::from(18.0),
         font_bold,
-        "TOTALS",
+        TOTALS,
     );
 
-    let totals_text = format!(
-        "  {} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
+    let center_text = format!(
+        "{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
         stats.activity_count,
         stats.total_distance_km,
         stats.total_time_display(),
         stats.total_elevation_gain_m,
         stats.total_kudos,
     );
-    let after_totals_x = start_x + approx_text_width("TOTALS", 16);
+    let totals_end = MARGIN + measure_text_width(font_bold, PxScale::from(18.0), TOTALS) as i32;
+    let right_edge = W as i32 - MARGIN;
+    let text_w = measure_text_width(font, PxScale::from(16.0), &center_text) as i32;
+    let center_x = totals_end + (right_edge - totals_end - text_w) / 2;
     draw_text_mut(
         img,
         BLACK,
-        after_totals_x,
+        center_x,
         y,
         PxScale::from(16.0),
         font,
-        &totals_text,
+        &center_text,
     );
 
     // Extra space after
@@ -706,7 +697,7 @@ fn draw_last_activity(
     let y = sep_y + 6;
 
     if let Some(ref last) = stats.last_activity {
-        // "LAST ACTIVITY" title (no sport icon)
+        // "LAST ACTIVITY" title
         draw_text_mut(
             img,
             ORANGE,
@@ -812,6 +803,21 @@ fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, y_start: i32, x_sta
 }
 
 // --- Helpers ---
+
+fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
+    let scaled = font.as_scaled(scale);
+    let mut width = 0.0;
+    let mut prev: Option<ab_glyph::GlyphId> = None;
+    for c in text.chars() {
+        let gid = font.glyph_id(c);
+        if let Some(p) = prev {
+            width += scaled.kern(p, gid);
+        }
+        width += scaled.h_advance(gid);
+        prev = Some(gid);
+    }
+    width
+}
 
 fn center_x_text(img_width: u32, text: &str, font_size: u32) -> i32 {
     let approx_char_w = font_size as f32 * 0.55;
