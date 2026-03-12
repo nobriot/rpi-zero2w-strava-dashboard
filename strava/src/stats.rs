@@ -295,11 +295,11 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
 }
 
 /// Race distance buckets for finding best running efforts.
-const RACE_BUCKETS: &[(&str, f64, f64, f64)] = &[
-    // (label, target_km, min_km, max_km)
-    ("5K", 5.0, 4.95, 5.5),
-    ("10K", 10.0, 9.9, 11.0),
-    ("HM", 21.1, 21.0, 23.2),
+const RACE_BUCKETS: &[(&str, f64, f64)] = &[
+    // (label, target_km, min_km)
+    ("5K", 5.0, 4.95),
+    ("10K", 10.0, 9.9),
+    ("HM", 21.1, 21.0),
 ];
 
 fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
@@ -310,29 +310,37 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
 
     RACE_BUCKETS
         .iter()
-        .map(|&(label, target_km, min_km, max_km)| {
+        .map(|&(label, target_km, min_km)| {
             let best = runs
                 .iter()
-                .filter(|a| {
-                    let km = a.distance_km();
-                    km >= min_km && km <= max_km
-                })
-                .max_by(|a, b| {
-                    a.average_speed
-                        .partial_cmp(&b.average_speed)
+                .filter(|a| a.distance_km() >= min_km)
+                .min_by(|a, b| {
+                    let est_a = a.moving_time as f64 * target_km / a.distance_km();
+                    let est_b = b.moving_time as f64 * target_km / b.distance_km();
+                    est_a
+                        .partial_cmp(&est_b)
                         .unwrap_or(std::cmp::Ordering::Equal)
                 });
 
             match best {
-                Some(b) => RunRaceBest {
-                    label,
-                    target_km,
-                    distance_km: Some(b.distance_km()),
-                    moving_time_display: Some(b.format_moving_time()),
-                    pace: Some(b.format_pace_per_km()),
-                    name: Some(b.name.clone().unwrap_or_else(|| "Unnamed".to_string())),
-                    date: Some(format_date(&b.start_date_local)),
-                },
+                Some(b) => {
+                    let estimated_secs = b.moving_time as f64 * target_km / b.distance_km();
+                    let est_time = format_estimated_time(estimated_secs);
+                    let pace_min = estimated_secs / 60.0 / target_km;
+                    let pace_whole = pace_min.floor() as u32;
+                    let pace_frac = ((pace_min - pace_whole as f64) * 60.0).round() as u32;
+                    let pace = format!("{pace_whole}:{pace_frac:02} /km");
+
+                    RunRaceBest {
+                        label,
+                        target_km,
+                        distance_km: Some(b.distance_km()),
+                        moving_time_display: Some(est_time),
+                        pace: Some(pace),
+                        name: Some(b.name.clone().unwrap_or_else(|| "Unnamed".to_string())),
+                        date: Some(format_date(&b.start_date_local)),
+                    }
+                }
                 None => RunRaceBest {
                     label,
                     target_km,
@@ -345,4 +353,111 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
             }
         })
         .collect()
+}
+
+/// Format an estimated time in seconds as "Xh Ym Zs" or "Ym Zs".
+fn format_estimated_time(secs: f64) -> String {
+    let total = secs.round() as u32;
+    let hours = total / 3600;
+    let minutes = (total % 3600) / 60;
+    let seconds = total % 60;
+    if hours > 0 {
+        format!("{hours}h {minutes}m {seconds}s")
+    } else if minutes > 0 {
+        format!("{minutes}m {seconds}s")
+    } else {
+        format!("{seconds}s")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SummaryActivity;
+
+    fn make_run(distance_m: f64, moving_time: u32, name: &str, date: &str) -> SummaryActivity {
+        SummaryActivity {
+            id: 0,
+            name: Some(name.to_string()),
+            activity_type: Some("Run".to_string()),
+            distance: distance_m,
+            moving_time,
+            elapsed_time: moving_time,
+            total_elevation_gain: 0.0,
+            average_speed: if moving_time > 0 {
+                distance_m / moving_time as f64
+            } else {
+                0.0
+            },
+            max_speed: 0.0,
+            start_date: Some(format!("{date}T08:00:00Z")),
+            start_date_local: Some(format!("{date}T08:00:00Z")),
+            map: None,
+            commute: false,
+            private: false,
+            kudos_count: 0,
+        }
+    }
+
+    #[test]
+    fn test_longer_faster_run_beats_in_bucket_run() {
+        // 10.5km in 50min (in old bucket) vs 13km in 55min (outside old bucket but faster est 10K)
+        let in_bucket = make_run(10_500.0, 3000, "Short run", "2026-03-08");
+        let longer = make_run(13_000.0, 3300, "Interval session", "2026-03-10");
+
+        // est 10K for in_bucket: 3000 * 10/10.5 = 2857s
+        // est 10K for longer:    3300 * 10/13.0 = 2538s  ← faster
+        let results = compute_race_bests(&[in_bucket, longer]);
+        let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
+
+        assert_eq!(ten_k.name.as_deref(), Some("Interval session"));
+    }
+
+    #[test]
+    fn test_exact_target_distance() {
+        // Run exactly 10.0km
+        let exact = make_run(10_000.0, 3000, "Exact 10K", "2026-03-01");
+        let results = compute_race_bests(&[exact]);
+        let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
+
+        assert_eq!(ten_k.name.as_deref(), Some("Exact 10K"));
+        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 0s"));
+    }
+
+    #[test]
+    fn test_run_below_target_excluded() {
+        // 9.0km run should NOT qualify for 10K (below min_km of 9.8)
+        let short = make_run(9_000.0, 2400, "Short run", "2026-03-01");
+        let results = compute_race_bests(&[short]);
+        let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
+
+        assert!(
+            ten_k.name.is_none(),
+            "9km run should not qualify as 10K best"
+        );
+    }
+
+    #[test]
+    fn test_non_run_excluded() {
+        // A ride should never appear in race bests
+        let ride = SummaryActivity {
+            activity_type: Some("Ride".to_string()),
+            ..make_run(15_000.0, 2000, "Fast ride", "2026-03-01")
+        };
+        let results = compute_race_bests(&[ride]);
+        let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
+
+        assert!(ten_k.name.is_none());
+    }
+
+    #[test]
+    fn test_estimated_time_display() {
+        // 12km in 60min → est 10K = 60 * 10/12 = 50min = 3000s
+        let run = make_run(12_000.0, 3600, "Long run", "2026-03-01");
+        let results = compute_race_bests(&[run]);
+        let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
+
+        assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 0s"));
+        assert_eq!(ten_k.pace.as_deref(), Some("5:00 /km"));
+    }
 }

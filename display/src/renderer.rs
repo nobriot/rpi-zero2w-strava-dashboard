@@ -530,7 +530,6 @@ fn draw_totals_row(
 }
 
 // --- Longest / Fastest split ---
-
 fn draw_longest_fastest(
     img: &mut RgbImage,
     font: &FontRef,
