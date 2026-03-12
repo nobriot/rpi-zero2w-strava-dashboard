@@ -22,6 +22,7 @@ const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
 const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
 const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
+const FONT_SYMBOL_BYTES: &[u8] = include_bytes!("../fonts/MesloLGMNerdFont-Bold-subset.ttf");
 const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png");
 
 const MARGIN: i32 = 24;
@@ -136,15 +137,25 @@ pub fn render_dashboard(
 
     let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
+    let font_symbol =
+        FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
     let layout = Layout::compute(stats);
 
     draw_header(&mut img, &font_bold, stats, battery, avatar);
 
     // FIXME: 3 sports bars don't fit, perhaps make a more compact version of the
     // layout where there are three of them.
-    let y = draw_sport_bars(&mut img, &font, &font_bold, stats, config, &layout);
-    let y = draw_totals_row(&mut img, &font, &font_bold, stats, y);
-    let y = draw_longest_fastest(&mut img, &font, &font_bold, stats, y, &layout);
+    let y = draw_sport_bars(
+        &mut img,
+        &font,
+        &font_bold,
+        &font_symbol,
+        stats,
+        config,
+        &layout,
+    );
+    let y = draw_totals_row(&mut img, &font, &font_bold, &font_symbol, stats, y);
+    let y = draw_longest_fastest(&mut img, &font, &font_bold, &font_symbol, stats, y, &layout);
     draw_last_activity(&mut img, &font, &font_bold, stats, y);
 
     img
@@ -232,15 +243,10 @@ fn draw_header(
 
     let year = Utc::now().year();
     let title = format!("{} - {}", stats.athlete_first_name, year);
-    draw_text_mut(
-        img,
-        WHITE,
-        center_x_text(W, &title, 30),
-        13,
-        PxScale::from(30.0),
-        font_bold,
-        &title,
-    );
+    let title_scale = PxScale::from(30.0);
+    let title_w = measure_text_width(font_bold, title_scale, &title);
+    let title_x = ((W as f32 - title_w) / 2.0) as i32;
+    draw_text_mut(img, WHITE, title_x, 13, title_scale, font_bold, &title);
 
     draw_powered_by_logo(img);
 
@@ -340,6 +346,7 @@ fn draw_sport_bars(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
+    font_symbol: &FontRef,
     stats: &DashboardStats,
     config: &DisplayConfig,
     layout: &Layout,
@@ -372,14 +379,26 @@ fn draw_sport_bars(
             &left_text,
         );
 
-        // Right: checkered flag + goal
+        // Right: flag + goal (green when goal reached)
+        let goal_reached = summary.ytd_distance_km >= goal;
+        let flag_color = if goal_reached { GREEN } else { DARK_GRAY };
         let goal_text = format!("{:.0}km", goal);
         let goal_w = approx_text_width(&goal_text, 14);
-        let flag_x = (MARGIN + bar_w as i32 - goal_w - 16) as u32;
-        icons::draw_checkered_flag(img, flag_x, (y + 3) as u32, DARK_GRAY);
+        let flag_scale = PxScale::from(14.0);
+        let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
+        let flag_x = MARGIN + bar_w as i32 - goal_w - flag_w - 4;
         draw_text_mut(
             img,
-            DARK_GRAY,
+            flag_color,
+            flag_x,
+            y + 3,
+            flag_scale,
+            font_symbol,
+            "\u{F11E} ",
+        );
+        draw_text_mut(
+            img,
+            flag_color,
             MARGIN + bar_w as i32 - goal_w,
             y + 3,
             PxScale::from(14.0),
@@ -468,6 +487,7 @@ fn draw_totals_row(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
+    font_symbol: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
 ) -> i32 {
@@ -482,12 +502,15 @@ fn draw_totals_row(
         LIGHT_GRAY,
     );
 
-    // "TOTALS" in orange, rest in black — centered as a single line
+    // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
     let y = sep_y + 8;
+    let icon_scale = PxScale::from(18.0);
+    draw_text_mut(img, ORANGE, MARGIN, y, icon_scale, font_symbol, "\u{F080} ");
+    let icon_w = measure_text_width(font_symbol, icon_scale, "\u{F080} ") as i32 + 4;
     draw_text_mut(
         img,
         ORANGE,
-        MARGIN,
+        MARGIN + icon_w,
         y,
         PxScale::from(18.0),
         font_bold,
@@ -502,7 +525,8 @@ fn draw_totals_row(
         stats.total_elevation_gain_m,
         stats.total_kudos,
     );
-    let totals_end = MARGIN + measure_text_width(font_bold, PxScale::from(18.0), TOTALS) as i32;
+    let totals_end =
+        MARGIN + icon_w + measure_text_width(font_bold, PxScale::from(18.0), TOTALS) as i32;
     let right_edge = W as i32 - MARGIN;
     let text_w = measure_text_width(font, PxScale::from(16.0), &center_text) as i32;
     let center_x = totals_end + (right_edge - totals_end - text_w) / 2;
@@ -525,6 +549,7 @@ fn draw_longest_fastest(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
+    font_symbol: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
     layout: &Layout,
@@ -544,12 +569,22 @@ fn draw_longest_fastest(
     let name_sz = PxScale::from(layout.lf_name_font);
     let entry_h = layout.lf_entry_h;
 
-    // Left: LONGEST
-    icons::draw_ruler(img, MARGIN as u32, y as u32, ORANGE);
+    // Left: LONGEST (ruler icon)
+    let section_icon_scale = PxScale::from(20.0);
     draw_text_mut(
         img,
         ORANGE,
-        MARGIN + ICON_SZ as i32 + 4,
+        MARGIN,
+        y,
+        section_icon_scale,
+        font_symbol,
+        "\u{F0569} ",
+    );
+    let ruler_icon_w = measure_text_width(font_symbol, section_icon_scale, "\u{F0569} ") as i32 + 4;
+    draw_text_mut(
+        img,
+        ORANGE,
+        MARGIN + ruler_icon_w,
         y,
         PxScale::from(20.0),
         font_bold,
@@ -597,13 +632,22 @@ fn draw_longest_fastest(
         left_y += entry_h;
     }
 
-    // Right: FASTEST (run race bests — always 3 buckets)
+    // Right: FASTEST (bolt icon, run race bests — always 3 buckets)
     let right_x = MARGIN + half_w as i32 + 12;
-    icons::draw_lightning(img, right_x as u32, y as u32, ORANGE);
     draw_text_mut(
         img,
         ORANGE,
-        right_x + ICON_SZ as i32 + 4,
+        right_x,
+        y,
+        section_icon_scale,
+        font_symbol,
+        "\u{F0E7} ",
+    );
+    let bolt_icon_w = measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + 4;
+    draw_text_mut(
+        img,
+        ORANGE,
+        right_x + bolt_icon_w,
         y,
         PxScale::from(20.0),
         font_bold,
@@ -807,12 +851,6 @@ fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
         prev = Some(gid);
     }
     width
-}
-
-fn center_x_text(img_width: u32, text: &str, font_size: u32) -> i32 {
-    let approx_char_w = font_size as f32 * 0.55;
-    let text_w = text.len() as f32 * approx_char_w;
-    ((img_width as f32 - text_w) / 2.0) as i32
 }
 
 fn approx_text_width(text: &str, font_size: u32) -> i32 {
