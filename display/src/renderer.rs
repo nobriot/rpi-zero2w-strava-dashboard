@@ -277,8 +277,8 @@ fn draw_powered_by_logo(img: &mut RgbImage) {
     let resized = logo.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
     let rgba = resized.to_rgba8();
 
-    let ox = W - target_w - 10;
-    let oy = (HEADER_H - target_h) / 2;
+    let ox = W - target_w - 5;
+    let oy = 4;
 
     for py in 0..target_h {
         for px in 0..target_w {
