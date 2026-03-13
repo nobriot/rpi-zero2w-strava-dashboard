@@ -380,6 +380,7 @@ mod tests {
             id: 0,
             name: Some(name.to_string()),
             activity_type: Some("Run".to_string()),
+            sport_type: Some("Run".to_string()),
             distance: distance_m,
             moving_time,
             elapsed_time: moving_time,
@@ -442,6 +443,7 @@ mod tests {
         // A ride should never appear in race bests
         let ride = SummaryActivity {
             activity_type: Some("Ride".to_string()),
+            sport_type: Some("Ride".to_string()),
             ..make_run(15_000.0, 2000, "Fast ride", "2026-03-01")
         };
         let results = compute_race_bests(&[ride]);

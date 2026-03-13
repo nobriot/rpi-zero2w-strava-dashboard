@@ -14,9 +14,13 @@ pub struct SummaryActivity {
     #[serde(default)]
     pub name: Option<String>,
 
-    /// The activity type (Run, Ride, Swim, etc.)
+    /// The activity type (Run, Ride, Swim, etc.) — deprecated by Strava
     #[serde(rename = "type", default)]
     pub activity_type: Option<String>,
+
+    /// The sport type (fine-grained: TrailRun, MountainBikeRide, etc.)
+    #[serde(default)]
+    pub sport_type: Option<String>,
 
     /// The activity's distance in meters
     #[serde(default)]
@@ -122,19 +126,35 @@ impl SummaryActivity {
     }
 
     pub fn is_run(&self) -> bool {
-        self.activity_type.as_deref() == Some("Run")
+        self.sport() == Some(SportType::Run)
     }
 
     pub fn is_ride(&self) -> bool {
-        self.activity_type.as_deref() == Some("Ride")
+        self.sport() == Some(SportType::Ride)
     }
 
     pub fn is_swim(&self) -> bool {
-        self.activity_type.as_deref() == Some("Swim")
+        self.sport() == Some(SportType::Swim)
     }
 
-    /// Map activity type string to a `SportType` enum value.
+    /// Map `sport_type` string to a [`SportType`] enum value.
+    ///
+    /// Prefers the newer `sport_type` field; falls back to the deprecated `type`
+    /// field so that cached data without `sport_type` still classifies correctly.
+    /// Includes virtual activities, excludes electric-assisted.
     pub fn sport(&self) -> Option<SportType> {
+        // Try sport_type first (fine-grained, current API field)
+        if let Some(st) = self.sport_type.as_deref() {
+            return match st {
+                "Run" | "TrailRun" | "VirtualRun" => Some(SportType::Run),
+                "Ride" | "MountainBikeRide" | "GravelRide" | "VirtualRide" | "Handcycle"
+                | "Velomobile" => Some(SportType::Ride),
+                "Swim" => Some(SportType::Swim),
+                // Explicitly exclude electric-assisted and unknown types
+                _ => None,
+            };
+        }
+        // Fallback to deprecated type field (for cached data without sport_type)
         match self.activity_type.as_deref() {
             Some("Run") => Some(SportType::Run),
             Some("Ride") => Some(SportType::Ride),
@@ -245,6 +265,7 @@ mod tests {
             "id": 123,
             "name": "Morning Run",
             "type": "Run",
+            "sport_type": "Run",
             "distance": 10000.0,
             "moving_time": 3000,
             "elapsed_time": 3200,
@@ -260,5 +281,85 @@ mod tests {
         let points = activity.polyline_points();
         assert_eq!(points.len(), 3);
         assert!(activity.map.is_some());
+        assert_eq!(activity.sport(), Some(SportType::Run));
+    }
+
+    #[test]
+    fn test_sport_type_run_variants() {
+        for sport_type in ["Run", "TrailRun", "VirtualRun"] {
+            let json = format!(
+                r#"{{"id":1,"sport_type":"{}","distance":5000.0}}"#,
+                sport_type
+            );
+            let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+            assert_eq!(a.sport(), Some(SportType::Run), "{sport_type} should map to Run");
+            assert!(a.is_run(), "{sport_type} should be is_run()");
+        }
+    }
+
+    #[test]
+    fn test_sport_type_ride_variants() {
+        for sport_type in [
+            "Ride",
+            "MountainBikeRide",
+            "GravelRide",
+            "VirtualRide",
+            "Handcycle",
+            "Velomobile",
+        ] {
+            let json = format!(
+                r#"{{"id":1,"sport_type":"{}","distance":20000.0}}"#,
+                sport_type
+            );
+            let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+            assert_eq!(a.sport(), Some(SportType::Ride), "{sport_type} should map to Ride");
+            assert!(a.is_ride(), "{sport_type} should be is_ride()");
+        }
+    }
+
+    #[test]
+    fn test_sport_type_swim() {
+        let json = r#"{"id":1,"sport_type":"Swim","distance":1500.0}"#;
+        let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+        assert_eq!(a.sport(), Some(SportType::Swim));
+        assert!(a.is_swim());
+    }
+
+    #[test]
+    fn test_sport_type_ebike_excluded() {
+        for sport_type in ["EBikeRide", "EMountainBikeRide"] {
+            let json = format!(
+                r#"{{"id":1,"sport_type":"{}","distance":30000.0}}"#,
+                sport_type
+            );
+            let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+            assert_eq!(a.sport(), None, "{sport_type} should be excluded");
+            assert!(!a.is_ride(), "{sport_type} should NOT be is_ride()");
+        }
+    }
+
+    #[test]
+    fn test_sport_type_unknown_excluded() {
+        let json = r#"{"id":1,"sport_type":"Yoga","distance":0.0}"#;
+        let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+        assert_eq!(a.sport(), None);
+    }
+
+    #[test]
+    fn test_missing_sport_type_falls_back_to_type() {
+        let json = r#"{"id":1,"type":"Run","distance":5000.0}"#;
+        let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            a.sport(),
+            Some(SportType::Run),
+            "should fall back to deprecated type field"
+        );
+    }
+
+    #[test]
+    fn test_missing_both_fields() {
+        let json = r#"{"id":1,"distance":5000.0}"#;
+        let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+        assert_eq!(a.sport(), None);
     }
 }
