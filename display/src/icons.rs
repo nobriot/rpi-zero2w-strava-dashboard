@@ -9,6 +9,7 @@ const ICON_SWIM: &[u8] = include_bytes!("../assets/icon_swim.png");
 const ICON_LIGHTNING: &[u8] = include_bytes!("../assets/icon_lightning.png");
 const ICON_RULER: &[u8] = include_bytes!("../assets/icon_ruler.png");
 const ICON_KUDOS: &[u8] = include_bytes!("../assets/icon_kudos.png");
+const ICON_BAR_CHART: &[u8] = include_bytes!("../assets/icon_bar_chart.png");
 
 /// Overlay a pre-rendered PNG icon onto the image at (x, y), tinting non-transparent
 /// pixels with the given color.
@@ -63,6 +64,10 @@ pub fn draw_ruler(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
 
 pub fn draw_thumbs_up(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     draw_icon(img, x, y, ICON_KUDOS, color);
+}
+
+pub fn draw_bar_chart(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
+    draw_icon(img, x, y, ICON_BAR_CHART, color);
 }
 
 /// Draw the sport-appropriate icon.
