@@ -24,6 +24,7 @@ const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
 const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
 const FONT_SYMBOL_BYTES: &[u8] = include_bytes!("../fonts/MesloLGMNerdFont-Bold-subset.ttf");
+const FONT_EMOJI_BYTES: &[u8] = include_bytes!("../fonts/NotoEmoji-subset.ttf");
 const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png");
 
 const MARGIN: i32 = 24;
@@ -140,6 +141,8 @@ pub fn render_dashboard(
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
     let font_symbol =
         FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
+    let font_emoji =
+        FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
     let layout = Layout::compute(stats, config.goals.len());
 
     draw_header(&mut img, &font_bold, stats, battery, avatar);
@@ -154,8 +157,17 @@ pub fn render_dashboard(
         &layout,
     );
     let y = draw_totals_row(&mut img, &font, &font_bold, stats, y);
-    let y = draw_longest_fastest(&mut img, &font, &font_bold, &font_symbol, stats, y, &layout);
-    draw_last_activity(&mut img, &font, &font_bold, stats, y);
+    let y = draw_longest_fastest(
+        &mut img,
+        &font,
+        &font_bold,
+        &font_symbol,
+        &font_emoji,
+        stats,
+        y,
+        &layout,
+    );
+    draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y);
 
     img
 }
@@ -666,6 +678,7 @@ fn draw_longest_fastest(
     font: &FontRef,
     font_bold: &FontRef,
     font_symbol: &FontRef,
+    font_emoji: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
     layout: &Layout,
@@ -716,13 +729,14 @@ fn draw_longest_fastest(
                 &line1,
             );
             let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
-            draw_text_mut(
+            draw_text_with_fallback(
                 img,
                 DARK_GRAY,
                 MARGIN + ICON_SZ as i32 + 12,
                 left_y + 20,
                 name_sz,
                 font,
+                font_emoji,
                 &line2,
             );
         } else if stats.show_all_sports {
@@ -781,13 +795,14 @@ fn draw_longest_fastest(
             let name = rb.name.as_deref().unwrap_or("—");
             let date = rb.date.as_deref().unwrap_or("—");
             let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
-            draw_text_mut(
+            draw_text_with_fallback(
                 img,
                 DARK_GRAY,
                 right_x + ICON_SZ as i32 + 12,
                 right_y + 20,
                 name_sz,
                 font,
+                font_emoji,
                 &line2,
             );
         } else {
@@ -823,6 +838,7 @@ fn draw_last_activity(
     img: &mut RgbImage,
     font: &FontRef,
     font_bold: &FontRef,
+    font_emoji: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
 ) {
@@ -853,13 +869,14 @@ fn draw_last_activity(
         let line1_x = MARGIN;
         icons::draw_sport_icon(img, line1_x as u32, (y + 22) as u32, last.sport, BLACK);
         let line1 = format!("{}  ·  {}", truncate_str(&last.name, 30), last.date);
-        draw_text_mut(
+        draw_text_with_fallback(
             img,
             BLACK,
             line1_x + ICON_SZ as i32 + 6,
             y + 24,
             PxScale::from(16.0),
             font,
+            font_emoji,
             &line1,
         );
 
@@ -958,6 +975,40 @@ fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
         prev = Some(gid);
     }
     width
+}
+
+/// Draw text with emoji fallback. For each character, tries the primary font first;
+/// if the glyph is missing (`.notdef`), falls back to the emoji font.
+/// Characters missing from both fonts are silently skipped.
+fn draw_text_with_fallback(
+    img: &mut RgbImage,
+    color: Rgb<u8>,
+    x: i32,
+    y: i32,
+    scale: PxScale,
+    font: &FontRef,
+    font_emoji: &FontRef,
+    text: &str,
+) {
+    let notdef = ab_glyph::GlyphId(0);
+    let mut cursor_x = x as f32;
+
+    for c in text.chars() {
+        let gid = font.glyph_id(c);
+        if gid != notdef {
+            let s: String = c.to_string();
+            draw_text_mut(img, color, cursor_x as i32, y, scale, font, &s);
+            cursor_x += font.as_scaled(scale).h_advance(gid);
+        } else {
+            let emoji_gid = font_emoji.glyph_id(c);
+            if emoji_gid != notdef {
+                let s: String = c.to_string();
+                draw_text_mut(img, color, cursor_x as i32, y, scale, font_emoji, &s);
+                cursor_x += font_emoji.as_scaled(scale).h_advance(emoji_gid);
+            }
+            // else: skip the character entirely (no more squares)
+        }
+    }
 }
 
 fn approx_text_width(text: &str, font_size: u32) -> i32 {
