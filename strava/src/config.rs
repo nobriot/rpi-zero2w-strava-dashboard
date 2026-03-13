@@ -3,6 +3,8 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::types::SportType;
+
 const CONFIG_EXAMPLE: &str = include_str!("../../config.example.toml");
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -27,6 +29,13 @@ pub struct StravaConfig {
     refresh_token: String,
 }
 
+/// A single sport distance goal for the dashboard progress bars.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GoalConfig {
+    pub sport: SportType,
+    pub km: f64,
+}
+
 /// Display and scheduling configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DisplayConfig {
@@ -42,17 +51,10 @@ pub struct DisplayConfig {
     #[serde(default = "default_quiet_end")]
     pub quiet_end_hour: u32,
 
-    /// Yearly running goal in km (default: 2000)
-    #[serde(default = "default_run_goal")]
-    pub run_goal_km: f64,
-
-    /// Yearly cycling goal in km (default: 5000)
-    #[serde(default = "default_ride_goal")]
-    pub ride_goal_km: f64,
-
-    /// Yearly swimming goal in km (default: 200)
-    #[serde(default = "default_swim_goal")]
-    pub swim_goal_km: f64,
+    /// Ordered sport goals (1–3). Controls which progress bars appear and their order.
+    /// First goal is always full-width; with 3 goals, 2nd and 3rd share a row.
+    #[serde(default = "default_goals")]
+    pub goals: Vec<GoalConfig>,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -64,14 +66,21 @@ fn default_quiet_start() -> u32 {
 fn default_quiet_end() -> u32 {
     8
 }
-fn default_run_goal() -> f64 {
-    800.0
-}
-fn default_ride_goal() -> f64 {
-    5000.0
-}
-fn default_swim_goal() -> f64 {
-    30.0
+fn default_goals() -> Vec<GoalConfig> {
+    vec![
+        GoalConfig {
+            sport: SportType::Run,
+            km: 800.0,
+        },
+        GoalConfig {
+            sport: SportType::Ride,
+            km: 5000.0,
+        },
+        GoalConfig {
+            sport: SportType::Swim,
+            km: 30.0,
+        },
+    ]
 }
 
 impl Default for DisplayConfig {
@@ -80,10 +89,15 @@ impl Default for DisplayConfig {
             sleep_interval_secs: default_sleep_interval(),
             quiet_start_hour: default_quiet_start(),
             quiet_end_hour: default_quiet_end(),
-            run_goal_km: default_run_goal(),
-            ride_goal_km: default_ride_goal(),
-            swim_goal_km: default_swim_goal(),
+            goals: default_goals(),
         }
+    }
+}
+
+impl DisplayConfig {
+    /// Look up the goal distance for a sport, if configured.
+    pub fn goal_for(&self, sport: SportType) -> Option<f64> {
+        self.goals.iter().find(|g| g.sport == sport).map(|g| g.km)
     }
 }
 

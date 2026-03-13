@@ -66,7 +66,8 @@ pub struct ActivityTotal {
 }
 
 /// Sport type enum for querying stats
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SportType {
     Run,
     Ride,

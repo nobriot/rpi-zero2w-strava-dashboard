@@ -3,6 +3,7 @@ use chrono::{Datelike, Utc};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
 use imageproc::rect::Rect;
+use strava::config::GoalConfig;
 use strava::stats::DashboardStats;
 use strava::types::SportType;
 
@@ -31,27 +32,26 @@ const ICON_SZ: u32 = icons::SIZE;
 
 /// Dashboard display configuration.
 pub struct DisplayConfig {
-    pub run_goal_km: f64,
-    pub ride_goal_km: f64,
-    pub swim_goal_km: f64,
-}
-
-impl DisplayConfig {
-    fn goal_for(&self, sport: SportType) -> f64 {
-        match sport {
-            SportType::Run => self.run_goal_km,
-            SportType::Ride => self.ride_goal_km,
-            SportType::Swim => self.swim_goal_km,
-        }
-    }
+    pub goals: Vec<GoalConfig>,
 }
 
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
-            run_goal_km: 2000.0,
-            ride_goal_km: 5000.0,
-            swim_goal_km: 200.0,
+            goals: vec![
+                GoalConfig {
+                    sport: SportType::Ride,
+                    km: 5000.0,
+                },
+                GoalConfig {
+                    sport: SportType::Run,
+                    km: 500.0,
+                },
+                GoalConfig {
+                    sport: SportType::Swim,
+                    km: 30.0,
+                },
+            ],
         }
     }
 }
@@ -89,11 +89,12 @@ struct Layout {
 }
 
 impl Layout {
-    fn compute(stats: &DashboardStats) -> Self {
-        let n = stats.sports.len() as i32;
+    fn compute(stats: &DashboardStats, n_goals: usize) -> Self {
+        // With 3 goals, the 2nd and 3rd share a row → 2 visual rows max
+        let n_bar_rows = n_goals.min(2) as i32;
         let n_lf = count_longest_fastest_entries(stats) as i32;
 
-        let base_bars = n * 34;
+        let base_bars = n_bar_rows * 34;
         let base_totals = 34;
         let base_lf = 26 + n_lf * 34;
         let base_last = 60;
@@ -139,12 +140,10 @@ pub fn render_dashboard(
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
     let font_symbol =
         FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
-    let layout = Layout::compute(stats);
+    let layout = Layout::compute(stats, config.goals.len());
 
     draw_header(&mut img, &font_bold, stats, battery, avatar);
 
-    // FIXME: 3 sports bars don't fit, perhaps make a more compact version of the
-    // layout where there are three of them.
     let y = draw_sport_bars(
         &mut img,
         &font,
@@ -338,9 +337,15 @@ fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
 
 // --- Sport Goal Bars ---
 //
-// Layout per bar:
+// Layout per full-width bar:
 //   [icon] RUN 234km   14h 22m · 27 runs    🏁 2000km
 //   [======================== bar ========================]
+//
+// With 3 goals, the 2nd and 3rd share a row as half-width bars:
+//   [icon] RIDE 3456km  85 rides 🏁5000km  [icon] SWIM 28km 12 swims 🏁30km
+//   [========= bar =========]               [========= bar =========]
+
+const HALF_BAR_GAP: u32 = 16;
 
 fn draw_sport_bars(
     img: &mut RgbImage,
@@ -351,134 +356,250 @@ fn draw_sport_bars(
     config: &DisplayConfig,
     layout: &Layout,
 ) -> i32 {
-    let bar_w = (W as i32 - 2 * MARGIN) as u32;
+    let full_w = (W as i32 - 2 * MARGIN) as u32;
     let mut y = (HEADER_H + 8) as i32;
 
-    for summary in &stats.sports {
-        let goal = config.goal_for(summary.sport);
-        let noun = sport_count_noun(summary.sport);
-        let pct = if goal > 0.0 {
-            (summary.ytd_distance_km / goal).min(1.0)
-        } else {
-            0.0
-        };
+    let goals = &config.goals;
+    if goals.is_empty() {
+        return y;
+    }
 
-        // Sport icon (always black)
-        icons::draw_sport_icon(img, MARGIN as u32, (y + 1) as u32, summary.sport, BLACK);
+    match goals.len() {
+        1 | 2 => {
+            for goal_cfg in goals {
+                draw_goal_bar(
+                    img,
+                    font,
+                    font_bold,
+                    font_symbol,
+                    stats,
+                    goal_cfg,
+                    layout,
+                    MARGIN,
+                    full_w,
+                    16.0,
+                    14.0,
+                    14.0,
+                    18.0,
+                    y,
+                );
+                y += layout.bar_section_h;
+            }
+        }
+        _ => {
+            // First goal: full-width
+            draw_goal_bar(
+                img,
+                font,
+                font_bold,
+                font_symbol,
+                stats,
+                &goals[0],
+                layout,
+                MARGIN,
+                full_w,
+                16.0,
+                14.0,
+                14.0,
+                18.0,
+                y,
+            );
+            y += layout.bar_section_h;
 
-        // Left: "RUN 234km"
-        let label = sport_label(summary.sport);
-        let left_text = format!("{}  {:.0}km", label, summary.ytd_distance_km);
-        draw_text_mut(
-            img,
-            BLACK,
-            MARGIN + ICON_SZ as i32 + 6,
-            y + 2,
-            PxScale::from(16.0),
-            font_bold,
-            &left_text,
-        );
+            // 2nd and 3rd: half-width side by side
+            let half_w = (full_w - HALF_BAR_GAP) / 2;
+            let right_x = MARGIN + half_w as i32 + HALF_BAR_GAP as i32;
 
-        // Right: flag + goal (green when goal reached)
-        let goal_reached = summary.ytd_distance_km >= goal;
-        let flag_color = if goal_reached { GREEN } else { DARK_GRAY };
-        let goal_text = format!("{:.0}km", goal);
-        let goal_w = approx_text_width(&goal_text, 14);
-        let flag_scale = PxScale::from(18.0);
-        let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
-        let flag_x = MARGIN + bar_w as i32 - goal_w - flag_w - 4;
-        draw_text_mut(
-            img,
-            flag_color,
-            flag_x,
-            y + 1,
-            flag_scale,
-            font_symbol,
-            "\u{F11E} ",
-        );
-        draw_text_mut(
-            img,
-            flag_color,
-            MARGIN + bar_w as i32 - goal_w,
-            y + 3,
-            PxScale::from(14.0),
-            font,
-            &goal_text,
-        );
+            draw_goal_bar(
+                img,
+                font,
+                font_bold,
+                font_symbol,
+                stats,
+                &goals[1],
+                layout,
+                MARGIN,
+                half_w,
+                14.0,
+                12.0,
+                12.0,
+                16.0,
+                y,
+            );
+            draw_goal_bar(
+                img,
+                font,
+                font_bold,
+                font_symbol,
+                stats,
+                &goals[2],
+                layout,
+                right_x,
+                half_w,
+                14.0,
+                12.0,
+                12.0,
+                16.0,
+                y,
+            );
+            y += layout.bar_section_h;
+        }
+    }
 
-        // Center: "14h 22m · 27 runs"
-        let center_text = if summary.ytd_distance_km >= goal {
-            format!(
-                "+{:.0}km  ·  {}  ·  {} {}",
-                summary.ytd_distance_km - goal,
-                summary.ytd_time_display,
-                summary.ytd_count,
-                noun
-            )
-        } else {
-            format!(
-                "{}  ·  {} {}",
-                summary.ytd_time_display, summary.ytd_count, noun
-            )
-        };
-        let left_end = MARGIN + ICON_SZ as i32 + 6 + approx_text_width(&left_text, 16) + 12;
-        let right_start = flag_x as i32 - 8;
-        let center_w = approx_text_width(&center_text, 14);
-        let center_x = left_end + (right_start - left_end - center_w) / 2;
+    y
+}
+
+/// Draw a single goal bar (full-width or half-width) at the given position.
+#[allow(clippy::too_many_arguments)]
+fn draw_goal_bar(
+    img: &mut RgbImage,
+    font: &FontRef,
+    font_bold: &FontRef,
+    font_symbol: &FontRef,
+    stats: &DashboardStats,
+    goal_cfg: &GoalConfig,
+    layout: &Layout,
+    x: i32,
+    bar_w: u32,
+    left_font_sz: f32,
+    center_font_sz: f32,
+    goal_font_sz: f32,
+    flag_font_sz: f32,
+    y: i32,
+) {
+    let sport = goal_cfg.sport;
+    let goal = goal_cfg.km;
+    let summary = stats.sports.iter().find(|s| s.sport == sport);
+    let ytd_km = summary.map(|s| s.ytd_distance_km).unwrap_or(0.0);
+    let ytd_count = summary.map(|s| s.ytd_count).unwrap_or(0);
+    let ytd_time = summary
+        .map(|s| s.ytd_time_display.as_str())
+        .unwrap_or("0h 00m");
+    let noun = sport_count_noun(sport);
+
+    let pct = if goal > 0.0 {
+        (ytd_km / goal).min(1.0)
+    } else {
+        0.0
+    };
+
+    // Sport icon
+    icons::draw_sport_icon(img, x as u32, (y + 1) as u32, sport, BLACK);
+
+    // Left: "RUN 234km"
+    let label = sport_label(sport);
+    let left_text = format!("{}  {:.0}km", label, ytd_km);
+    let left_scale = PxScale::from(left_font_sz);
+    draw_text_mut(
+        img,
+        BLACK,
+        x + ICON_SZ as i32 + 6,
+        y + 2,
+        left_scale,
+        font_bold,
+        &left_text,
+    );
+
+    // Right: flag + goal (green when reached)
+    let goal_reached = ytd_km >= goal;
+    let flag_color = if goal_reached { GREEN } else { DARK_GRAY };
+    let goal_text = format!("{:.0}km", goal);
+    let goal_scale = PxScale::from(goal_font_sz);
+    let goal_w = measure_text_width(font, goal_scale, &goal_text) as i32;
+    let flag_scale = PxScale::from(flag_font_sz);
+    let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
+    let flag_x = x + bar_w as i32 - goal_w - flag_w - 4;
+    draw_text_mut(
+        img,
+        flag_color,
+        flag_x,
+        y + 1,
+        flag_scale,
+        font_symbol,
+        "\u{F11E} ",
+    );
+    draw_text_mut(
+        img,
+        flag_color,
+        x + bar_w as i32 - goal_w,
+        y + 3,
+        goal_scale,
+        font,
+        &goal_text,
+    );
+
+    // Center: time + count (condensed for narrow bars)
+    let center_scale = PxScale::from(center_font_sz);
+    let center_text = if goal_reached {
+        format!(
+            "+{:.0}km · {} · {} {}",
+            ytd_km - goal,
+            ytd_time,
+            ytd_count,
+            noun
+        )
+    } else {
+        format!("{} · {} {}", ytd_time, ytd_count, noun)
+    };
+
+    let left_end =
+        x + ICON_SZ as i32 + 6 + measure_text_width(font_bold, left_scale, &left_text) as i32 + 8;
+    let right_start = flag_x - 6;
+    let center_w = measure_text_width(font, center_scale, &center_text) as i32;
+    let available = right_start - left_end;
+
+    if available >= center_w {
+        let center_x = left_end + (available - center_w) / 2;
         draw_text_mut(
             img,
             DARK_GRAY,
             center_x,
             y + 3,
-            PxScale::from(14.0),
+            center_scale,
             font,
             &center_text,
         );
-
-        // Bar with black border
-        let bar_y = y + 22;
-        draw_filled_rect_mut(
-            img,
-            Rect::at(MARGIN, bar_y).of_size(bar_w, layout.bar_h),
-            BAR_BG,
-        );
-
-        let fill_w = ((bar_w as f64) * pct) as u32;
-        if fill_w > 0 {
-            draw_filled_rect_mut(
-                img,
-                Rect::at(MARGIN, bar_y).of_size(fill_w, layout.bar_h),
-                GREEN,
-            );
+    } else {
+        // Fall back to count only for very narrow bars
+        let short_text = format!("{} {}", ytd_count, noun);
+        let short_w = measure_text_width(font, center_scale, &short_text) as i32;
+        if available >= short_w {
+            let cx = left_end + (available - short_w) / 2;
+            draw_text_mut(img, DARK_GRAY, cx, y + 3, center_scale, font, &short_text);
         }
-
-        // Thin black border
-        let bx = MARGIN as f32;
-        let by = bar_y as f32;
-        let bx2 = (MARGIN as u32 + bar_w) as f32;
-        let by2 = (bar_y as u32 + layout.bar_h) as f32;
-        draw_line_segment_mut(img, (bx, by), (bx2, by), BLACK);
-        draw_line_segment_mut(img, (bx, by2), (bx2, by2), BLACK);
-        draw_line_segment_mut(img, (bx, by), (bx, by2), BLACK);
-        draw_line_segment_mut(img, (bx2, by), (bx2, by2), BLACK);
-
-        // Orange dashed year-progress marker
-        let yp = year_progress();
-        let marker_x = MARGIN as f32 + (bar_w as f64 * yp) as f32;
-        let bar_top = bar_y as f32;
-        let bar_bot = (bar_y as u32 + layout.bar_h) as f32;
-        let mut dy = bar_top;
-        while dy < bar_bot {
-            let seg_end = (dy + 3.0).min(bar_bot);
-            draw_line_segment_mut(img, (marker_x, dy), (marker_x, seg_end), ORANGE);
-            draw_line_segment_mut(img, (marker_x + 1.0, dy), (marker_x + 1.0, seg_end), ORANGE);
-            dy += 5.0;
-        }
-
-        y += layout.bar_section_h;
     }
 
-    y
+    // Progress bar with black border
+    let bar_y = y + 22;
+    draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(bar_w, layout.bar_h), BAR_BG);
+
+    let fill_w = ((bar_w as f64) * pct) as u32;
+    if fill_w > 0 {
+        draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(fill_w, layout.bar_h), GREEN);
+    }
+
+    // Thin black border
+    let bx = x as f32;
+    let by = bar_y as f32;
+    let bx2 = (x as u32 + bar_w) as f32;
+    let by2 = (bar_y as u32 + layout.bar_h) as f32;
+    draw_line_segment_mut(img, (bx, by), (bx2, by), BLACK);
+    draw_line_segment_mut(img, (bx, by2), (bx2, by2), BLACK);
+    draw_line_segment_mut(img, (bx, by), (bx, by2), BLACK);
+    draw_line_segment_mut(img, (bx2, by), (bx2, by2), BLACK);
+
+    // Orange dashed year-progress marker
+    let yp = year_progress();
+    let marker_x = x as f32 + (bar_w as f64 * yp) as f32;
+    let bar_top = bar_y as f32;
+    let bar_bot = (bar_y as u32 + layout.bar_h) as f32;
+    let mut dy = bar_top;
+    while dy < bar_bot {
+        let seg_end = (dy + 3.0).min(bar_bot);
+        draw_line_segment_mut(img, (marker_x, dy), (marker_x, seg_end), ORANGE);
+        draw_line_segment_mut(img, (marker_x + 1.0, dy), (marker_x + 1.0, seg_end), ORANGE);
+        dy += 5.0;
+    }
 }
 
 // --- Totals (single line) ---
@@ -503,7 +624,7 @@ fn draw_totals_row(
 
     // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
     let y = sep_y + 8;
-    icons::draw_bar_chart(img, MARGIN as u32, y as u32, ORANGE);
+    icons::draw_bar_chart(img, MARGIN as u32, (y - 6) as u32, ORANGE);
     let icon_w = ICON_SZ as i32 + 4;
     draw_text_mut(
         img,

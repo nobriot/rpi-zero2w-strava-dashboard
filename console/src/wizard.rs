@@ -135,9 +135,18 @@ refresh_token = "PLACEHOLDER"
 sleep_interval_secs = 10800
 quiet_start_hour = 20
 quiet_end_hour = 8
-run_goal_km = 2000.0
-ride_goal_km = 5000.0
-swim_goal_km = 200.0
+
+[[display.goals]]
+sport = "run"
+km = 800.0
+
+[[display.goals]]
+sport = "ride"
+km = 5000.0
+
+[[display.goals]]
+sport = "swim"
+km = 30.0
 "#
     );
 

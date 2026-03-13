@@ -175,9 +175,7 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 
     // Render
     let display_config = display::renderer::DisplayConfig {
-        run_goal_km: config.display.run_goal_km,
-        ride_goal_km: config.display.ride_goal_km,
-        swim_goal_km: config.display.swim_goal_km,
+        goals: config.display.goals.clone(),
     };
     let img = display::renderer::render_dashboard(
         &stats,
