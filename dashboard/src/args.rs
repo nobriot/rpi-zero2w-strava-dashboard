@@ -24,7 +24,7 @@ pub struct Args {
     #[arg(long, value_name = "PATH")]
     pub save_png: Option<String>,
 
-    /// Clear all cached data (athlete, stats, activities, avatar) and exit
+    /// Clear all cached data (athlete, stats, activities, avatar)
     #[arg(long)]
     pub clear_cache: bool,
 

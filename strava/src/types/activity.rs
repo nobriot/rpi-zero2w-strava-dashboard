@@ -292,7 +292,11 @@ mod tests {
                 sport_type
             );
             let a: SummaryActivity = serde_json::from_str(&json).unwrap();
-            assert_eq!(a.sport(), Some(SportType::Run), "{sport_type} should map to Run");
+            assert_eq!(
+                a.sport(),
+                Some(SportType::Run),
+                "{sport_type} should map to Run"
+            );
             assert!(a.is_run(), "{sport_type} should be is_run()");
         }
     }
@@ -312,7 +316,11 @@ mod tests {
                 sport_type
             );
             let a: SummaryActivity = serde_json::from_str(&json).unwrap();
-            assert_eq!(a.sport(), Some(SportType::Ride), "{sport_type} should map to Ride");
+            assert_eq!(
+                a.sport(),
+                Some(SportType::Ride),
+                "{sport_type} should map to Ride"
+            );
             assert!(a.is_ride(), "{sport_type} should be is_ride()");
         }
     }

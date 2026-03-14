@@ -68,7 +68,6 @@ fn run() -> Result<()> {
             .clear()
             .map_err(errors::DashError::Config)?;
         eprintln!("Cache cleared.");
-        return Ok(());
     }
 
     // Load config

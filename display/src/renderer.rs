@@ -141,8 +141,7 @@ pub fn render_dashboard(
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
     let font_symbol =
         FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
-    let font_emoji =
-        FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
+    let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
     let layout = Layout::compute(stats, config.goals.len());
 
     draw_header(&mut img, &font_bold, stats, battery, avatar);
