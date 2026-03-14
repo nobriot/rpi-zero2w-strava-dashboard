@@ -36,8 +36,12 @@ fn main() {
 }
 
 /// Run the OAuth authorization flow explicitly, then save the refresh token.
-fn run_auth() -> Result<()> {
-    let mut config = strava::config::Config::load_for_auth().map_err(errors::DashError::Config)?;
+fn run_auth(config_path: Option<&PathBuf>) -> Result<()> {
+    let mut config = match config_path {
+        Some(path) => strava::config::Config::load_from_for_auth(path),
+        None => strava::config::Config::load_for_auth(),
+    }
+    .map_err(errors::DashError::Config)?;
 
     let token_response =
         strava::oauth::run_auth_flow(&config).map_err(errors::DashError::Strava)?;
@@ -56,7 +60,7 @@ fn run() -> Result<()> {
         Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
 
     if args.auth {
-        return run_auth();
+        return run_auth(args.config.as_ref());
     }
 
     if args.clear_cache {
@@ -68,7 +72,11 @@ fn run() -> Result<()> {
     }
 
     // Load config
-    let mut config = strava::config::Config::load().map_err(errors::DashError::Config)?;
+    let mut config = match args.config.as_ref() {
+        Some(path) => strava::config::Config::load_from(path),
+        None => strava::config::Config::load(),
+    }
+    .map_err(errors::DashError::Config)?;
     log::info!("Config loaded successfully");
 
     let sleep_secs = config.display.sleep_interval_secs;

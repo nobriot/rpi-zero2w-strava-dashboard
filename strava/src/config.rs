@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::types::SportType;
 
@@ -134,7 +134,12 @@ impl Config {
             ));
         }
 
-        let contents = fs::read_to_string(&path)
+        Self::load_from(&path)
+    }
+
+    /// Load config from an explicit file path.
+    pub fn load_from(path: &Path) -> Result<Self, String> {
+        let contents = fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file {}: {e}", path.display()))?;
 
         let config: Config = toml::from_str(&contents)
@@ -197,7 +202,12 @@ impl Config {
             return Self::load();
         }
 
-        let contents = fs::read_to_string(&path)
+        Self::load_from_for_auth(&path)
+    }
+
+    /// Load config for auth from an explicit file path.
+    pub fn load_from_for_auth(path: &Path) -> Result<Self, String> {
+        let contents = fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file {}: {e}", path.display()))?;
 
         let config: Config = toml::from_str(&contents)

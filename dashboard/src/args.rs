@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -9,6 +11,10 @@ pub struct Args {
     /// to all activities
     #[arg(short, long)]
     pub auth: bool,
+
+    /// Path to a config file (default: ~/.config/rpi-zero2w-strava-dash/config.toml)
+    #[arg(short, long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 
     /// Run a single cycle (fetch → render → display) and exit
     #[arg(long)]
