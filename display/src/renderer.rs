@@ -672,6 +672,7 @@ fn draw_totals_row(
 }
 
 // --- Longest / Fastest split ---
+#[allow(clippy::too_many_arguments)]
 fn draw_longest_fastest(
     img: &mut RgbImage,
     font: &FontRef,
@@ -979,6 +980,7 @@ fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
 /// Draw text with emoji fallback. For each character, tries the primary font first;
 /// if the glyph is missing (`.notdef`), falls back to the emoji font.
 /// Characters missing from both fonts are silently skipped.
+#[allow(clippy::too_many_arguments)]
 fn draw_text_with_fallback(
     img: &mut RgbImage,
     color: Rgb<u8>,
