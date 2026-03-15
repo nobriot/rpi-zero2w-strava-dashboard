@@ -31,6 +31,31 @@ const MARGIN: i32 = 24;
 const HEADER_H: u32 = 56;
 const ICON_SZ: u32 = icons::SIZE;
 
+/// Resolution scale factor for rendering.
+#[derive(Clone, Copy)]
+pub struct Scale(u32);
+
+impl Scale {
+    pub fn new(factor: u32) -> Self {
+        Scale(factor.max(1))
+    }
+    pub fn u(&self, v: u32) -> u32 {
+        v * self.0
+    }
+    pub fn i(&self, v: i32) -> i32 {
+        v * self.0 as i32
+    }
+    pub fn f(&self, v: f32) -> f32 {
+        v * self.0 as f32
+    }
+    pub fn px(&self, v: f32) -> PxScale {
+        PxScale::from(v * self.0 as f32)
+    }
+    pub fn factor(&self) -> u32 {
+        self.0
+    }
+}
+
 /// Dashboard display configuration.
 pub struct DisplayConfig {
     pub goals: Vec<GoalConfig>,
@@ -90,7 +115,7 @@ struct Layout {
 }
 
 impl Layout {
-    fn compute(stats: &DashboardStats, n_goals: usize) -> Self {
+    fn compute(stats: &DashboardStats, n_goals: usize, s: Scale) -> Self {
         // With 3 goals, the 2nd and 3rd share a row → 2 visual rows max
         let n_bar_rows = n_goals.min(2) as i32;
         let n_lf = count_longest_fastest_entries(stats) as i32;
@@ -108,11 +133,11 @@ impl Layout {
         let lf_extra = if n_lf > 0 { (slack / 6).min(8) } else { 0 };
 
         Layout {
-            bar_section_h: 34 + bar_extra,
-            bar_h: 14,
-            lf_entry_h: 34 + lf_extra,
-            lf_detail_font: if slack > 60 { 16.0 } else { 15.0 },
-            lf_name_font: if slack > 60 { 14.0 } else { 13.0 },
+            bar_section_h: s.i(34 + bar_extra),
+            bar_h: s.u(14),
+            lf_entry_h: s.i(34 + lf_extra),
+            lf_detail_font: s.f(if slack > 60 { 16.0 } else { 15.0 }),
+            lf_name_font: s.f(if slack > 60 { 14.0 } else { 13.0 }),
         }
     }
 }
@@ -128,23 +153,24 @@ fn count_longest_fastest_entries(stats: &DashboardStats) -> usize {
     longest_count.max(fastest_count)
 }
 
-/// Render the full dashboard as an 800×480 RGB image.
+/// Render the full dashboard as an RGB image, scaled by the given factor.
 pub fn render_dashboard(
     stats: &DashboardStats,
     battery: Option<&BatteryStatus>,
     config: &DisplayConfig,
     avatar: Option<&[u8]>,
+    s: Scale,
 ) -> RgbImage {
-    let mut img = RgbImage::from_pixel(W, H, WHITE);
+    let mut img = RgbImage::from_pixel(s.u(W), s.u(H), WHITE);
 
     let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
     let font_symbol =
         FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
     let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
-    let layout = Layout::compute(stats, config.goals.len());
+    let layout = Layout::compute(stats, config.goals.len(), s);
 
-    draw_header(&mut img, &font_bold, stats, battery, avatar);
+    draw_header(&mut img, &font_bold, stats, battery, avatar, s);
 
     let y = draw_sport_bars(
         &mut img,
@@ -154,8 +180,9 @@ pub fn render_dashboard(
         stats,
         config,
         &layout,
+        s,
     );
-    let y = draw_totals_row(&mut img, &font, &font_bold, stats, y);
+    let y = draw_totals_row(&mut img, &font, &font_bold, stats, y, s);
     let y = draw_longest_fastest(
         &mut img,
         &font,
@@ -165,72 +192,76 @@ pub fn render_dashboard(
         stats,
         y,
         &layout,
+        s,
     );
-    draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y);
+    draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, s);
 
     img
 }
 
 /// Render a minimal offline dashboard indicating no network connectivity.
-pub fn render_offline_dashboard(battery: Option<&BatteryStatus>) -> RgbImage {
-    let mut img = RgbImage::from_pixel(W, H, WHITE);
+pub fn render_offline_dashboard(battery: Option<&BatteryStatus>, s: Scale) -> RgbImage {
+    let mut img = RgbImage::from_pixel(s.u(W), s.u(H), WHITE);
     let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
     let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
 
     // Orange header bar
-    draw_filled_rect_mut(&mut img, Rect::at(0, 0).of_size(W, HEADER_H), ORANGE);
+    draw_filled_rect_mut(
+        &mut img,
+        Rect::at(0, 0).of_size(s.u(W), s.u(HEADER_H)),
+        ORANGE,
+    );
 
     draw_text_mut(
         &mut img,
         WHITE,
-        MARGIN,
-        14,
-        PxScale::from(26.0),
+        s.i(MARGIN),
+        s.i(14),
+        s.px(26.0),
         &font_bold,
         "STRAVA DASHBOARD",
     );
 
     // Battery icon if available
     if let Some(bat) = battery {
-        icons::draw_battery(&mut img, W - 70, 16, WHITE, bat.percentage as f32 / 100.0);
+        icons::draw_battery(
+            &mut img,
+            s.u(W) - s.u(70),
+            s.u(16),
+            WHITE,
+            bat.percentage as f32 / 100.0,
+            s.factor(),
+        );
     }
 
     // Centered offline message
     let msg = "OFFLINE";
-    let msg_w = approx_text_width(msg, 48);
-    let msg_x = (W as i32 - msg_w) / 2;
+    let msg_w = approx_text_width(msg, s.u(48));
+    let msg_x = (s.u(W) as i32 - msg_w) / 2;
     draw_text_mut(
         &mut img,
         ORANGE,
         msg_x,
-        180,
-        PxScale::from(48.0),
+        s.i(180),
+        s.px(48.0),
         &font_bold,
         msg,
     );
 
     let sub = "No internet connection";
-    let sub_w = approx_text_width(sub, 20);
-    let sub_x = (W as i32 - sub_w) / 2;
-    draw_text_mut(
-        &mut img,
-        DARK_GRAY,
-        sub_x,
-        240,
-        PxScale::from(20.0),
-        &font,
-        sub,
-    );
+    let sub_w = approx_text_width(sub, s.u(20));
+    let sub_x = (s.u(W) as i32 - sub_w) / 2;
+    draw_text_mut(&mut img, DARK_GRAY, sub_x, s.i(240), s.px(20.0), &font, sub);
 
     let hint = "Will retry automatically next cycle";
-    let hint_w = approx_text_width(hint, 16);
-    let hint_x = (W as i32 - hint_w) / 2;
+    let hint_w = approx_text_width(hint, s.u(16));
+    let hint_x = (s.u(W) as i32 - hint_w) / 2;
     draw_text_mut(
         &mut img,
         LIGHT_GRAY,
         hint_x,
-        270,
-        PxScale::from(16.0),
+        s.i(270),
+        s.px(16.0),
         &font,
         hint,
     );
@@ -244,51 +275,59 @@ fn draw_header(
     stats: &DashboardStats,
     battery: Option<&BatteryStatus>,
     avatar: Option<&[u8]>,
+    s: Scale,
 ) {
-    draw_filled_rect_mut(img, Rect::at(0, 0).of_size(W, HEADER_H), ORANGE);
+    draw_filled_rect_mut(img, Rect::at(0, 0).of_size(s.u(W), s.u(HEADER_H)), ORANGE);
 
     if let Some(bytes) = avatar {
-        draw_avatar(img, bytes);
+        draw_avatar(img, bytes, s);
     }
 
     let year = Utc::now().year();
     let title = format!("{} - {}", stats.athlete_first_name, year);
-    let title_scale = PxScale::from(30.0);
+    let title_scale = s.px(30.0);
     let title_w = measure_text_width(font_bold, title_scale, &title);
-    let title_x = ((W as f32 - title_w) / 2.0) as i32;
-    draw_text_mut(img, WHITE, title_x, 13, title_scale, font_bold, &title);
+    let title_x = ((s.u(W) as f32 - title_w) / 2.0) as i32;
+    draw_text_mut(img, WHITE, title_x, s.i(13), title_scale, font_bold, &title);
 
-    draw_powered_by_logo(img);
+    draw_powered_by_logo(img, s);
 
     if let Some(bat) = battery {
-        let bx = W - 60;
-        icons::draw_battery(img, bx, 20, WHITE, bat.percentage as f32 / 100.0);
+        let bx = s.u(W) - s.u(60);
+        icons::draw_battery(
+            img,
+            bx,
+            s.u(20),
+            WHITE,
+            bat.percentage as f32 / 100.0,
+            s.factor(),
+        );
         let bat_text = format!("{}%", bat.percentage);
         draw_text_mut(
             img,
             WHITE,
-            (bx - 40) as i32,
-            19,
-            PxScale::from(18.0),
+            (bx - s.u(40)) as i32,
+            s.i(19),
+            s.px(18.0),
             font_bold,
             &bat_text,
         );
     }
 }
 
-fn draw_powered_by_logo(img: &mut RgbImage) {
+fn draw_powered_by_logo(img: &mut RgbImage, s: Scale) {
     let logo = match image::load_from_memory(POWERED_BY_STRAVA) {
         Ok(l) => l,
         Err(_) => return,
     };
-    let target_w = 110u32;
+    let target_w = s.u(110);
     let aspect = logo.width() as f64 / logo.height() as f64;
     let target_h = (target_w as f64 / aspect) as u32;
     let resized = logo.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
     let rgba = resized.to_rgba8();
 
-    let ox = W - target_w - 5;
-    let oy = 4;
+    let ox = s.u(W) - target_w - s.u(5);
+    let oy = s.u(4);
 
     for py in 0..target_h {
         for px in 0..target_w {
@@ -313,7 +352,7 @@ fn draw_powered_by_logo(img: &mut RgbImage) {
 const AVATAR_SIZE: u32 = 42;
 const AVATAR_PAD: u32 = 7;
 
-fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
+fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8], s: Scale) {
     let avatar = match image::load_from_memory(avatar_bytes) {
         Ok(a) => a,
         Err(e) => {
@@ -321,23 +360,20 @@ fn draw_avatar(img: &mut RgbImage, avatar_bytes: &[u8]) {
             return;
         }
     };
-    let resized = avatar.resize_exact(
-        AVATAR_SIZE,
-        AVATAR_SIZE,
-        image::imageops::FilterType::Triangle,
-    );
+    let sz = s.u(AVATAR_SIZE);
+    let resized = avatar.resize_exact(sz, sz, image::imageops::FilterType::Triangle);
     let rgb = resized.to_rgb8();
-    let cx = AVATAR_SIZE as f64 / 2.0;
-    let cy = AVATAR_SIZE as f64 / 2.0;
+    let cx = sz as f64 / 2.0;
+    let cy = sz as f64 / 2.0;
     let r = cx;
-    for py in 0..AVATAR_SIZE {
-        for px in 0..AVATAR_SIZE {
+    for py in 0..sz {
+        for px in 0..sz {
             let dx = px as f64 - cx + 0.5;
             let dy = py as f64 - cy + 0.5;
             if dx * dx + dy * dy <= r * r {
                 let pixel = rgb.get_pixel(px, py);
-                let ix = AVATAR_PAD + px;
-                let iy = AVATAR_PAD + py;
+                let ix = s.u(AVATAR_PAD) + px;
+                let iy = s.u(AVATAR_PAD) + py;
                 if ix < img.width() && iy < img.height() {
                     img.put_pixel(ix, iy, *pixel);
                 }
@@ -366,9 +402,10 @@ fn draw_sport_bars(
     stats: &DashboardStats,
     config: &DisplayConfig,
     layout: &Layout,
+    s: Scale,
 ) -> i32 {
-    let full_w = (W as i32 - 2 * MARGIN) as u32;
-    let mut y = (HEADER_H + 8) as i32;
+    let full_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
+    let mut y = (s.u(HEADER_H) + s.u(8)) as i32;
 
     let goals = &config.goals;
     if goals.is_empty() {
@@ -386,13 +423,14 @@ fn draw_sport_bars(
                     stats,
                     goal_cfg,
                     layout,
-                    MARGIN,
+                    s.i(MARGIN),
                     full_w,
-                    16.0,
-                    14.0,
-                    14.0,
-                    18.0,
+                    s.f(16.0),
+                    s.f(14.0),
+                    s.f(14.0),
+                    s.f(18.0),
                     y,
+                    s,
                 );
                 y += layout.bar_section_h;
             }
@@ -407,19 +445,20 @@ fn draw_sport_bars(
                 stats,
                 &goals[0],
                 layout,
-                MARGIN,
+                s.i(MARGIN),
                 full_w,
-                16.0,
-                14.0,
-                14.0,
-                18.0,
+                s.f(16.0),
+                s.f(14.0),
+                s.f(14.0),
+                s.f(18.0),
                 y,
+                s,
             );
             y += layout.bar_section_h;
 
             // 2nd and 3rd: half-width side by side
-            let half_w = (full_w - HALF_BAR_GAP) / 2;
-            let right_x = MARGIN + half_w as i32 + HALF_BAR_GAP as i32;
+            let half_w = (full_w - s.u(HALF_BAR_GAP)) / 2;
+            let right_x = s.i(MARGIN) + half_w as i32 + s.u(HALF_BAR_GAP) as i32;
 
             draw_goal_bar(
                 img,
@@ -429,13 +468,14 @@ fn draw_sport_bars(
                 stats,
                 &goals[1],
                 layout,
-                MARGIN,
+                s.i(MARGIN),
                 half_w,
-                14.0,
-                12.0,
-                12.0,
-                16.0,
+                s.f(14.0),
+                s.f(12.0),
+                s.f(12.0),
+                s.f(16.0),
                 y,
+                s,
             );
             draw_goal_bar(
                 img,
@@ -447,11 +487,12 @@ fn draw_sport_bars(
                 layout,
                 right_x,
                 half_w,
-                14.0,
-                12.0,
-                12.0,
-                16.0,
+                s.f(14.0),
+                s.f(12.0),
+                s.f(12.0),
+                s.f(16.0),
                 y,
+                s,
             );
             y += layout.bar_section_h;
         }
@@ -461,7 +502,6 @@ fn draw_sport_bars(
 }
 
 /// Draw a single goal bar (full-width or half-width) at the given position.
-#[allow(clippy::too_many_arguments)]
 fn draw_goal_bar(
     img: &mut RgbImage,
     font: &FontRef,
@@ -477,6 +517,7 @@ fn draw_goal_bar(
     goal_font_sz: f32,
     flag_font_sz: f32,
     y: i32,
+    s: Scale,
 ) {
     let sport = goal_cfg.sport;
     let goal = goal_cfg.km;
@@ -495,7 +536,7 @@ fn draw_goal_bar(
     };
 
     // Sport icon
-    icons::draw_sport_icon(img, x as u32, (y + 1) as u32, sport, BLACK);
+    icons::draw_sport_icon(img, x as u32, (y + s.i(1)) as u32, sport, BLACK, s.factor());
 
     // Left: "RUN 234km"
     let label = sport_label(sport);
@@ -504,8 +545,8 @@ fn draw_goal_bar(
     draw_text_mut(
         img,
         BLACK,
-        x + ICON_SZ as i32 + 6,
-        y + 2,
+        x + s.u(ICON_SZ) as i32 + s.i(6),
+        y + s.i(2),
         left_scale,
         font_bold,
         &left_text,
@@ -519,12 +560,12 @@ fn draw_goal_bar(
     let goal_w = measure_text_width(font, goal_scale, &goal_text) as i32;
     let flag_scale = PxScale::from(flag_font_sz);
     let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
-    let flag_x = x + bar_w as i32 - goal_w - flag_w - 4;
+    let flag_x = x + bar_w as i32 - goal_w - flag_w - s.i(4);
     draw_text_mut(
         img,
         flag_color,
         flag_x,
-        y + 1,
+        y + s.i(1),
         flag_scale,
         font_symbol,
         "\u{F11E} ",
@@ -533,7 +574,7 @@ fn draw_goal_bar(
         img,
         flag_color,
         x + bar_w as i32 - goal_w,
-        y + 3,
+        y + s.i(3),
         goal_scale,
         font,
         &goal_text,
@@ -553,9 +594,12 @@ fn draw_goal_bar(
         format!("{} · {} {}", ytd_time, ytd_count, noun)
     };
 
-    let left_end =
-        x + ICON_SZ as i32 + 6 + measure_text_width(font_bold, left_scale, &left_text) as i32 + 8;
-    let right_start = flag_x - 6;
+    let left_end = x
+        + s.u(ICON_SZ) as i32
+        + s.i(6)
+        + measure_text_width(font_bold, left_scale, &left_text) as i32
+        + s.i(8);
+    let right_start = flag_x - s.i(6);
     let center_w = measure_text_width(font, center_scale, &center_text) as i32;
     let available = right_start - left_end;
 
@@ -565,7 +609,7 @@ fn draw_goal_bar(
             img,
             DARK_GRAY,
             center_x,
-            y + 3,
+            y + s.i(3),
             center_scale,
             font,
             &center_text,
@@ -576,12 +620,20 @@ fn draw_goal_bar(
         let short_w = measure_text_width(font, center_scale, &short_text) as i32;
         if available >= short_w {
             let cx = left_end + (available - short_w) / 2;
-            draw_text_mut(img, DARK_GRAY, cx, y + 3, center_scale, font, &short_text);
+            draw_text_mut(
+                img,
+                DARK_GRAY,
+                cx,
+                y + s.i(3),
+                center_scale,
+                font,
+                &short_text,
+            );
         }
     }
 
     // Progress bar with black border
-    let bar_y = y + 22;
+    let bar_y = y + s.i(22);
     draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(bar_w, layout.bar_h), BAR_BG);
 
     let fill_w = ((bar_w as f64) * pct) as u32;
@@ -606,10 +658,16 @@ fn draw_goal_bar(
     let bar_bot = (bar_y as u32 + layout.bar_h) as f32;
     let mut dy = bar_top;
     while dy < bar_bot {
-        let seg_end = (dy + 3.0).min(bar_bot);
-        draw_line_segment_mut(img, (marker_x, dy), (marker_x, seg_end), ORANGE);
-        draw_line_segment_mut(img, (marker_x + 1.0, dy), (marker_x + 1.0, seg_end), ORANGE);
-        dy += 5.0;
+        let seg_end = (dy + s.f(3.0)).min(bar_bot);
+        for offset in 0..s.factor() {
+            draw_line_segment_mut(
+                img,
+                (marker_x + offset as f32, dy),
+                (marker_x + offset as f32, seg_end),
+                ORANGE,
+            );
+        }
+        dy += s.f(5.0);
     }
 }
 
@@ -621,28 +679,35 @@ fn draw_totals_row(
     font_bold: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
+    s: Scale,
 ) -> i32 {
     const TOTALS: &str = "TOTALS";
-    let content_w = (W as i32 - 2 * MARGIN) as u32;
+    let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
     // Extra space before separator
-    let sep_y = y_start + 4;
+    let sep_y = y_start + s.i(4);
     draw_filled_rect_mut(
         img,
-        Rect::at(MARGIN, sep_y).of_size(content_w, 1),
+        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)),
         LIGHT_GRAY,
     );
 
     // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
-    let y = sep_y + 8;
-    icons::draw_bar_chart(img, MARGIN as u32, (y - 6) as u32, ORANGE);
-    let icon_w = ICON_SZ as i32 + 4;
+    let y = sep_y + s.i(8);
+    icons::draw_bar_chart(
+        img,
+        s.u(MARGIN as u32),
+        (y - s.i(6)) as u32,
+        ORANGE,
+        s.factor(),
+    );
+    let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
     draw_text_mut(
         img,
         ORANGE,
-        MARGIN + icon_w,
+        s.i(MARGIN) + icon_w,
         y,
-        PxScale::from(18.0),
+        s.px(18.0),
         font_bold,
         TOTALS,
     );
@@ -655,24 +720,15 @@ fn draw_totals_row(
         stats.total_elevation_gain_m,
         stats.total_kudos,
     );
-    let text_w = measure_text_width(font, PxScale::from(16.0), &center_text) as i32;
-    let center_x = (W as i32 - text_w) / 2;
-    draw_text_mut(
-        img,
-        BLACK,
-        center_x,
-        y,
-        PxScale::from(16.0),
-        font,
-        &center_text,
-    );
+    let text_w = measure_text_width(font, s.px(16.0), &center_text) as i32;
+    let center_x = (s.u(W) as i32 - text_w) / 2;
+    draw_text_mut(img, BLACK, center_x, y, s.px(16.0), font, &center_text);
 
     // Extra space after
-    y + 28
+    y + s.i(28)
 }
 
 // --- Longest / Fastest split ---
-#[allow(clippy::too_many_arguments)]
 fn draw_longest_fastest(
     img: &mut RgbImage,
     font: &FontRef,
@@ -682,39 +738,47 @@ fn draw_longest_fastest(
     stats: &DashboardStats,
     y_start: i32,
     layout: &Layout,
+    s: Scale,
 ) -> i32 {
-    let content_w = (W as i32 - 2 * MARGIN) as u32;
+    let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
     let half_w = content_w / 2;
 
-    let sep_y = y_start + 2;
+    let sep_y = y_start + s.i(2);
     draw_filled_rect_mut(
         img,
-        Rect::at(MARGIN, sep_y).of_size(content_w, 1),
+        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)),
         LIGHT_GRAY,
     );
 
-    let y = sep_y + 6;
+    let y = sep_y + s.i(6);
     let detail_sz = PxScale::from(layout.lf_detail_font);
     let name_sz = PxScale::from(layout.lf_name_font);
     let entry_h = layout.lf_entry_h;
 
     // Left: LONGEST (ruler icon)
-    let section_icon_scale = PxScale::from(20.0);
-    icons::draw_ruler(img, MARGIN as u32, y as u32, ORANGE);
+    let section_icon_scale = s.px(20.0);
+    icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, ORANGE, s.factor());
     draw_text_mut(
         img,
         ORANGE,
-        MARGIN + ICON_SZ as i32 + 4,
+        s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
         y,
-        PxScale::from(20.0),
+        s.px(20.0),
         font_bold,
         "LONGEST",
     );
 
-    let mut left_y = y + 26;
-    for s in &stats.sports {
-        icons::draw_sport_icon(img, (MARGIN + 4) as u32, left_y as u32, s.sport, BLACK);
-        if let Some(ref longest) = s.longest {
+    let mut left_y = y + s.i(26);
+    for sp in &stats.sports {
+        icons::draw_sport_icon(
+            img,
+            (s.i(MARGIN) + s.i(4)) as u32,
+            left_y as u32,
+            sp.sport,
+            BLACK,
+            s.factor(),
+        );
+        if let Some(ref longest) = sp.longest {
             let line1 = format!(
                 "{:.1}km  ·  {}  ·  {}",
                 longest.distance_km, longest.moving_time_display, longest.pace_or_speed
@@ -722,8 +786,8 @@ fn draw_longest_fastest(
             draw_text_mut(
                 img,
                 BLACK,
-                MARGIN + ICON_SZ as i32 + 12,
-                left_y + 2,
+                s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
+                left_y + s.i(2),
                 detail_sz,
                 font_bold,
                 &line1,
@@ -732,8 +796,8 @@ fn draw_longest_fastest(
             draw_text_with_fallback(
                 img,
                 DARK_GRAY,
-                MARGIN + ICON_SZ as i32 + 12,
-                left_y + 20,
+                s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
+                left_y + s.i(20),
                 name_sz,
                 font,
                 font_emoji,
@@ -743,8 +807,8 @@ fn draw_longest_fastest(
             draw_text_mut(
                 img,
                 LIGHT_GRAY,
-                MARGIN + ICON_SZ as i32 + 12,
-                left_y + 2,
+                s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
+                left_y + s.i(2),
                 detail_sz,
                 font,
                 "—",
@@ -754,7 +818,7 @@ fn draw_longest_fastest(
     }
 
     // Right: FASTEST (bolt icon, run race bests — always 3 buckets)
-    let right_x = MARGIN + half_w as i32 + 12;
+    let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
     draw_text_mut(
         img,
         ORANGE,
@@ -764,21 +828,28 @@ fn draw_longest_fastest(
         font_symbol,
         "\u{F0E7} ",
     );
-    let bolt_icon_w = measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + 4;
+    let bolt_icon_w =
+        measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + s.i(4);
     draw_text_mut(
         img,
         ORANGE,
         right_x + bolt_icon_w,
         y,
-        PxScale::from(20.0),
+        s.px(20.0),
         font_bold,
         "FASTEST",
     );
 
-    let mut right_y = y + 26;
+    let mut right_y = y + s.i(26);
 
     for rb in &stats.run_race_bests {
-        icons::draw_runner(img, (right_x + 4) as u32, right_y as u32, BLACK);
+        icons::draw_runner(
+            img,
+            (right_x + s.i(4)) as u32,
+            right_y as u32,
+            BLACK,
+            s.factor(),
+        );
         if let (Some(pace), Some(dist), Some(time)) =
             (&rb.pace, rb.distance_km, &rb.moving_time_display)
         {
@@ -786,8 +857,8 @@ fn draw_longest_fastest(
             draw_text_mut(
                 img,
                 BLACK,
-                right_x + ICON_SZ as i32 + 12,
-                right_y + 2,
+                right_x + s.u(ICON_SZ) as i32 + s.i(12),
+                right_y + s.i(2),
                 detail_sz,
                 font_bold,
                 &line1,
@@ -798,8 +869,8 @@ fn draw_longest_fastest(
             draw_text_with_fallback(
                 img,
                 DARK_GRAY,
-                right_x + ICON_SZ as i32 + 12,
-                right_y + 20,
+                right_x + s.u(ICON_SZ) as i32 + s.i(12),
+                right_y + s.i(20),
                 name_sz,
                 font,
                 font_emoji,
@@ -810,8 +881,8 @@ fn draw_longest_fastest(
             draw_text_mut(
                 img,
                 LIGHT_GRAY,
-                right_x + ICON_SZ as i32 + 12,
-                right_y + 2,
+                right_x + s.u(ICON_SZ) as i32 + s.i(12),
+                right_y + s.i(2),
                 detail_sz,
                 font_bold,
                 &line1,
@@ -821,7 +892,7 @@ fn draw_longest_fastest(
     }
 
     // Vertical divider
-    let div_x = (MARGIN + half_w as i32) as f32;
+    let div_x = (s.i(MARGIN) + half_w as i32) as f32;
     draw_line_segment_mut(
         img,
         (div_x, y as f32),
@@ -829,7 +900,7 @@ fn draw_longest_fastest(
         LIGHT_GRAY,
     );
 
-    left_y.max(right_y) + 4
+    left_y.max(right_y) + s.i(4)
 }
 
 // --- Last Activity ---
@@ -841,40 +912,48 @@ fn draw_last_activity(
     font_emoji: &FontRef,
     stats: &DashboardStats,
     y_start: i32,
+    s: Scale,
 ) {
-    let content_w = (W as i32 - 2 * MARGIN) as u32;
+    let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
-    let sep_y = y_start + 2;
+    let sep_y = y_start + s.i(2);
     draw_filled_rect_mut(
         img,
-        Rect::at(MARGIN, sep_y).of_size(content_w, 1),
+        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)),
         LIGHT_GRAY,
     );
 
-    let y = sep_y + 6;
+    let y = sep_y + s.i(6);
 
     if let Some(ref last) = stats.last_activity {
         // "LAST ACTIVITY" title
         draw_text_mut(
             img,
             ORANGE,
-            MARGIN,
+            s.i(MARGIN),
             y,
-            PxScale::from(18.0),
+            s.px(18.0),
             font_bold,
             "LAST ACTIVITY",
         );
 
         // First line: sport icon + name · date
-        let line1_x = MARGIN;
-        icons::draw_sport_icon(img, line1_x as u32, (y + 22) as u32, last.sport, BLACK);
+        let line1_x = s.i(MARGIN);
+        icons::draw_sport_icon(
+            img,
+            line1_x as u32,
+            (y + s.i(22)) as u32,
+            last.sport,
+            BLACK,
+            s.factor(),
+        );
         let line1 = format!("{}  ·  {}", truncate_str(&last.name, 30), last.date);
         draw_text_with_fallback(
             img,
             BLACK,
-            line1_x + ICON_SZ as i32 + 6,
-            y + 24,
-            PxScale::from(16.0),
+            line1_x + s.u(ICON_SZ) as i32 + s.i(6),
+            y + s.i(24),
+            s.px(16.0),
             font,
             font_emoji,
             &line1,
@@ -887,35 +966,35 @@ fn draw_last_activity(
         draw_text_mut(
             img,
             DARK_GRAY,
-            line1_x + ICON_SZ as i32 + 6,
-            y + 44,
-            PxScale::from(15.0),
+            line1_x + s.u(ICON_SZ) as i32 + s.i(6),
+            y + s.i(44),
+            s.px(15.0),
             font,
             &line2,
         );
 
         // Polyline immediately right of text
-        let line1_w = ICON_SZ as i32 + 6 + approx_text_width(&line1, 16);
-        let line2_w = ICON_SZ as i32 + 6 + approx_text_width(&line2, 15);
-        let text_right = MARGIN + line1_w.max(line2_w) + 20;
-        draw_polyline(img, stats, y, text_right);
+        let line1_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line1, s.u(16));
+        let line2_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line2, s.u(15));
+        let text_right = s.i(MARGIN) + line1_w.max(line2_w) + s.i(20);
+        draw_polyline(img, stats, y, text_right, s);
     }
 }
 
 // --- Polyline (orange, right of last-activity text) ---
 
-fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, y_start: i32, x_start: i32) {
+fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, y_start: i32, x_start: i32, s: Scale) {
     let points = &stats.last_activity_polyline;
     if points.is_empty() {
         return;
     }
 
-    let area_x = x_start.max(MARGIN) as u32;
+    let area_x = x_start.max(s.i(MARGIN)) as u32;
     let area_y = y_start as u32;
-    let area_w = (W - 8).saturating_sub(area_x);
-    let area_h: u32 = H.saturating_sub(area_y + 8);
+    let area_w = (s.u(W) - s.u(8)).saturating_sub(area_x);
+    let area_h: u32 = s.u(H).saturating_sub(area_y + s.u(8));
 
-    if area_h < 20 || area_w < 20 {
+    if area_h < s.u(20) || area_w < s.u(20) {
         return;
     }
 
@@ -955,8 +1034,14 @@ fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, y_start: i32, x_sta
         let y1 =
             area_y as f32 + off_y as f32 + ((1.0 - (lat1 - min_lat) / lat_range) * draw_h) as f32;
 
-        draw_line_segment_mut(img, (x0, y0), (x1, y1), ORANGE);
-        draw_line_segment_mut(img, (x0 + 1.0, y0), (x1 + 1.0, y1), ORANGE);
+        for offset in 0..s.factor() {
+            draw_line_segment_mut(
+                img,
+                (x0 + offset as f32, y0),
+                (x1 + offset as f32, y1),
+                ORANGE,
+            );
+        }
     }
 }
 
@@ -980,7 +1065,6 @@ fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
 /// Draw text with emoji fallback. For each character, tries the primary font first;
 /// if the glyph is missing (`.notdef`), falls back to the emoji font.
 /// Characters missing from both fonts are silently skipped.
-#[allow(clippy::too_many_arguments)]
 fn draw_text_with_fallback(
     img: &mut RgbImage,
     color: Rgb<u8>,

@@ -120,7 +120,8 @@ fn run() -> Result<()> {
                     .and_then(|mut ina| ina.read_status())
                     .ok();
 
-                let img = display::renderer::render_offline_dashboard(battery.as_ref());
+                let scale = display::renderer::Scale::new(args.scale);
+                let img = display::renderer::render_offline_dashboard(battery.as_ref(), scale);
 
                 if let Some(ref path) = args.save_png {
                     let _ = img.save(path);
@@ -128,7 +129,15 @@ fn run() -> Result<()> {
 
                 match display::epd7in3e::Epd7in3e::new() {
                     Ok(mut epd) => {
-                        let buf = display::palette::quantize_to_epd_buffer(&img);
+                        let epd_img = if args.scale > 1 {
+                            display::renderer::render_offline_dashboard(
+                                battery.as_ref(),
+                                display::renderer::Scale::new(1),
+                            )
+                        } else {
+                            img.clone()
+                        };
+                        let buf = display::palette::quantize_to_epd_buffer(&epd_img);
                         let _ = epd.display_image(&buf);
                         let _ = epd.sleep();
                     }
@@ -184,11 +193,13 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
     let display_config = display::renderer::DisplayConfig {
         goals: config.display.goals.clone(),
     };
+    let scale = display::renderer::Scale::new(args.scale);
     let img = display::renderer::render_dashboard(
         &stats,
         battery.as_ref(),
         &display_config,
         avatar.as_deref(),
+        scale,
     );
 
     // Save PNG if requested
@@ -199,10 +210,21 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
         log::info!("Dashboard saved to {path}");
     }
 
-    // Try to push to e-paper display
+    // Try to push to e-paper display (always needs 800x480)
     match display::epd7in3e::Epd7in3e::new() {
         Ok(mut epd) => {
-            let buf = display::palette::quantize_to_epd_buffer(&img);
+            let epd_img = if args.scale > 1 {
+                display::renderer::render_dashboard(
+                    &stats,
+                    battery.as_ref(),
+                    &display_config,
+                    avatar.as_deref(),
+                    display::renderer::Scale::new(1),
+                )
+            } else {
+                img.clone()
+            };
+            let buf = display::palette::quantize_to_epd_buffer(&epd_img);
             epd.display_image(&buf)?;
             epd.sleep()?;
             log::info!("E-paper display updated");

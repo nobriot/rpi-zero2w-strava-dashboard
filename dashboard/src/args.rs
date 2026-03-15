@@ -31,4 +31,8 @@ pub struct Args {
     /// Show all sports (run/ride/swim) even if no activities exist (demo mode)
     #[arg(long)]
     pub show_all_sports: bool,
+
+    /// Resolution scale factor for PNG export (default: 1, use 2 for hi-res)
+    #[arg(long, default_value = "1", value_name = "N")]
+    pub scale: u32,
 }
