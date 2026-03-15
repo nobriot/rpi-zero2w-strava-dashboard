@@ -3,7 +3,7 @@ use serde::Serialize;
 
 /// Athlete statistics from Strava API
 /// Endpoint: GET /athletes/{id}/stats
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AthleteStats {
     /// The recent (last 4 weeks) ride totals
     #[serde(default)]

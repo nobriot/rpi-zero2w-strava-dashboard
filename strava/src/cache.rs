@@ -80,6 +80,18 @@ impl Cache {
         Some(entry.data)
     }
 
+    /// Load a cached value even if it has expired.
+    /// Returns `None` only if the file doesn't exist or can't be deserialized.
+    pub fn load_stale<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
+        let path = self.path(key);
+        let contents = fs::read_to_string(&path).ok()?;
+        let entry: CacheEntry<T> = serde_json::from_str(&contents).ok()?;
+
+        let age = Self::now().saturating_sub(entry.fetched_at);
+        log::info!("Stale cache hit for '{key}' ({age}s old)");
+        Some(entry.data)
+    }
+
     /// Save a value to the cache.
     pub fn save<T: Serialize>(&self, key: &str, data: &T, max_age: Option<u64>) {
         if let Err(e) = fs::create_dir_all(&self.dir) {

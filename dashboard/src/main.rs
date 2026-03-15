@@ -247,7 +247,23 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 }
 
 /// Fetch Strava data and compute dashboard stats. Also fetches/caches the avatar.
+/// Falls back to cached (possibly stale) data when the network is unavailable.
 fn fetch_stats(
+    config: &strava::config::Config,
+    show_all_sports: bool,
+) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
+    match fetch_stats_online(config, show_all_sports) {
+        Ok(result) => Ok(result),
+        Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
+            log::warn!("Network unavailable ({msg}), falling back to cached data");
+            fetch_stats_from_cache(show_all_sports)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Online path: authenticate, fetch from Strava API, cache results.
+fn fetch_stats_online(
     config: &strava::config::Config,
     show_all_sports: bool,
 ) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
@@ -281,6 +297,37 @@ fn fetch_stats(
         athlete.firstname.as_deref().unwrap_or("Athlete"),
         show_all_sports,
     );
+
+    Ok((dashboard, avatar))
+}
+
+/// Offline fallback: load stale cached data and build dashboard from whatever is available.
+fn fetch_stats_from_cache(
+    show_all_sports: bool,
+) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
+    let cache = strava::cache::Cache::new();
+
+    let athlete: Option<strava::types::DetailedAthlete> = cache.load_stale("athlete");
+    let firstname = athlete
+        .as_ref()
+        .and_then(|a| a.firstname.as_deref())
+        .unwrap_or("Athlete");
+
+    let stats: strava::types::AthleteStats = cache.load_stale("stats").unwrap_or_default();
+
+    let activities: Vec<strava::types::SummaryActivity> =
+        cache.load_stale("activities").unwrap_or_default();
+
+    let avatar = std::fs::read(avatar_cache_path()).ok();
+
+    log::info!(
+        "Offline fallback: athlete={}, activities={}",
+        firstname,
+        activities.len(),
+    );
+
+    let dashboard =
+        strava::stats::DashboardStats::compute(&stats, &activities, firstname, show_all_sports);
 
     Ok((dashboard, avatar))
 }
