@@ -5,265 +5,232 @@ use crate::types::{AthleteStats, DetailedAthlete, SummaryActivity, TokenResponse
 use reqwest::blocking::Client as ReqwestClient;
 
 pub struct Client {
-    client: ReqwestClient,
-    config: StravaConfig,
-    cache: Cache,
-    access_token: Option<String>,
+  client:       ReqwestClient,
+  config:       StravaConfig,
+  cache:        Cache,
+  access_token: Option<String>,
 }
 
 impl Client {
-    const STRAVA_API_BASE_URL: &str = "https://www.strava.com/api/v3/";
-    const STRAVA_TOKEN_URL: &str = "https://www.strava.com/oauth/token";
+  const STRAVA_API_BASE_URL: &str = "https://www.strava.com/api/v3/";
+  const STRAVA_TOKEN_URL: &str = "https://www.strava.com/oauth/token";
 
-    pub fn new(config: StravaConfig) -> Self {
-        log::info!("Creating Strava Client");
+  pub fn new(config: StravaConfig) -> Self {
+    log::info!("Creating Strava Client");
 
-        Self {
-            client: ReqwestClient::new(),
-            config,
-            cache: Cache::new(),
-            access_token: None,
-        }
+    Self { client: ReqwestClient::new(),
+           config,
+           cache: Cache::new(),
+           access_token: None }
+  }
+
+  pub fn get_token(&mut self) -> Result<(), StravaError> {
+    log::info!("Getting token");
+
+    let response = self.client
+                       .post(Self::STRAVA_TOKEN_URL)
+                       .form(&[("client_id", self.config.client_id()),
+                               ("client_secret", self.config.client_secret()),
+                               ("grant_type", "refresh_token"),
+                               ("refresh_token", self.config.refresh_token()),
+                               ("scope", "read,activity:read_all")])
+                       .send()
+                       .map_err(Self::classify_reqwest_error)?;
+
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+      return Err(StravaError::Unauthorized);
     }
 
-    pub fn get_token(&mut self) -> Result<(), StravaError> {
-        log::info!("Getting token");
-
-        let response = self
-            .client
-            .post(Self::STRAVA_TOKEN_URL)
-            .form(&[
-                ("client_id", self.config.client_id()),
-                ("client_secret", self.config.client_secret()),
-                ("grant_type", "refresh_token"),
-                ("refresh_token", self.config.refresh_token()),
-                ("scope", "read,activity:read_all"),
-            ])
-            .send()
-            .map_err(Self::classify_reqwest_error)?;
-
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(StravaError::Unauthorized);
-        }
-
-        if !response.status().is_success() {
-            return Err(StravaError::StravaApiResponseError(format!(
-                "Token refresh failed with status: {}",
-                response.status()
-            )));
-        }
-
-        let body = response
-            .text()
-            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
-
-        let token_response: TokenResponse = serde_json::from_str(&body)
-            .map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
-
-        self.access_token = Some(token_response.access_token);
-
-        // Persist updated refresh token if it changed
-        if token_response.refresh_token != self.config.refresh_token() {
-            log::info!("Refresh token changed, updating config");
-            self.config.set_refresh_token(token_response.refresh_token);
-            if let Err(e) = self.config.save() {
-                log::warn!("Failed to save updated refresh token: {e}");
-            }
-        }
-
-        log::info!("Access token obtained");
-        Ok(())
+    if !response.status().is_success() {
+      return Err(StravaError::StravaApiResponseError(format!("Token refresh failed with status: {}",
+                                                             response.status())));
     }
 
-    /// Sends a GET request to the Strava API.
-    /// On 401, automatically retries once after refreshing the access token.
-    fn strava_api_get(
-        &mut self,
-        api_endpoint: &str,
-    ) -> Result<reqwest::blocking::Response, StravaError> {
-        if self.access_token.is_none() {
-            self.get_token()?;
-        }
+    let body = response.text().map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
 
-        let response = self.do_api_get(api_endpoint)?;
+    let token_response: TokenResponse = serde_json::from_str(&body).map_err(|_| {
+                                          StravaError::StravaApiResponseDeserializationError(body)
+                                        })?;
 
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            log::info!("Got 401, attempting automatic token refresh");
-            self.access_token = None;
-            self.get_token()?;
-            let retry = self.do_api_get(api_endpoint)?;
+    self.access_token = Some(token_response.access_token);
 
-            if retry.status() == reqwest::StatusCode::UNAUTHORIZED {
-                return Err(StravaError::Unauthorized);
-            }
-
-            return Self::check_response(retry, api_endpoint);
-        }
-
-        Self::check_response(response, api_endpoint)
+    // Persist updated refresh token if it changed
+    if token_response.refresh_token != self.config.refresh_token() {
+      log::info!("Refresh token changed, updating config");
+      self.config.set_refresh_token(token_response.refresh_token);
+      if let Err(e) = self.config.save() {
+        log::warn!("Failed to save updated refresh token: {e}");
+      }
     }
 
-    /// Low-level GET request (no retry logic).
-    fn do_api_get(&self, api_endpoint: &str) -> Result<reqwest::blocking::Response, StravaError> {
-        self.client
-            .get(format!("{}{}", Self::STRAVA_API_BASE_URL, api_endpoint))
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.access_token.as_ref().unwrap()),
-            )
-            .header("Accept", "application/json")
-            .send()
-            .map_err(Self::classify_reqwest_error)
+    log::info!("Access token obtained");
+    Ok(())
+  }
+
+  /// Sends a GET request to the Strava API.
+  /// On 401, automatically retries once after refreshing the access token.
+  fn strava_api_get(&mut self,
+                    api_endpoint: &str)
+                    -> Result<reqwest::blocking::Response, StravaError> {
+    if self.access_token.is_none() {
+      self.get_token()?;
     }
 
-    /// Check a non-401 response for success.
-    fn check_response(
-        response: reqwest::blocking::Response,
-        api_endpoint: &str,
-    ) -> Result<reqwest::blocking::Response, StravaError> {
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().unwrap_or(String::from(""));
-            return Err(StravaError::StravaApiResponseError(format!(
-                "API request to '{}' failed with status: {} - body: {}",
-                api_endpoint, status, text
-            )));
-        }
-        Ok(response)
+    let response = self.do_api_get(api_endpoint)?;
+
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+      log::info!("Got 401, attempting automatic token refresh");
+      self.access_token = None;
+      self.get_token()?;
+      let retry = self.do_api_get(api_endpoint)?;
+
+      if retry.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(StravaError::Unauthorized);
+      }
+
+      return Self::check_response(retry, api_endpoint);
     }
 
-    /// GET /athlete — returns the authenticated athlete. Uses cache.
-    pub fn get_athlete(&mut self) -> Result<DetailedAthlete, StravaError> {
-        if let Some(cached) = self.cache.load::<DetailedAthlete>("athlete") {
-            return Ok(cached);
-        }
+    Self::check_response(response, api_endpoint)
+  }
 
-        let response = self.strava_api_get("athlete")?;
-        let body = response
-            .text()
-            .map_err(|_| StravaError::StravaApiResponseMissingBody)?;
-        log::debug!("JSON:\n{body}");
+  /// Low-level GET request (no retry logic).
+  fn do_api_get(&self, api_endpoint: &str) -> Result<reqwest::blocking::Response, StravaError> {
+    self.client
+        .get(format!("{}{}", Self::STRAVA_API_BASE_URL, api_endpoint))
+        .header("Authorization", format!("Bearer {}", self.access_token.as_ref().unwrap()))
+        .header("Accept", "application/json")
+        .send()
+        .map_err(Self::classify_reqwest_error)
+  }
 
-        let athlete: DetailedAthlete = serde_json::from_str(&body)
-            .map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
+  /// Check a non-401 response for success.
+  fn check_response(response: reqwest::blocking::Response,
+                    api_endpoint: &str)
+                    -> Result<reqwest::blocking::Response, StravaError> {
+    if !response.status().is_success() {
+      let status = response.status();
+      let text = response.text().unwrap_or(String::from(""));
+      return Err(StravaError::StravaApiResponseError(format!("API request to '{}' failed with status: {} - body: {}",
+                                                             api_endpoint, status, text)));
+    }
+    Ok(response)
+  }
 
-        self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
-        Ok(athlete)
+  /// GET /athlete — returns the authenticated athlete. Uses cache.
+  pub fn get_athlete(&mut self) -> Result<DetailedAthlete, StravaError> {
+    if let Some(cached) = self.cache.load::<DetailedAthlete>("athlete") {
+      return Ok(cached);
     }
 
-    /// Download raw bytes from any URL (no authentication).
-    /// Used for fetching avatar images, etc.
-    pub fn download_bytes(&self, url: &str) -> Result<Vec<u8>, StravaError> {
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .map_err(Self::classify_reqwest_error)?;
+    let response = self.strava_api_get("athlete")?;
+    let body = response.text().map_err(|_| StravaError::StravaApiResponseMissingBody)?;
+    log::debug!("JSON:\n{body}");
 
-        if !response.status().is_success() {
-            return Err(StravaError::StravaApiResponseError(format!(
-                "Download failed with status: {}",
-                response.status()
-            )));
-        }
+    let athlete: DetailedAthlete = serde_json::from_str(&body).map_err(|_| {
+                                     StravaError::StravaApiResponseDeserializationError(body)
+                                   })?;
 
-        let bytes = response
-            .bytes()
-            .map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
-        Ok(bytes.to_vec())
+    self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
+    Ok(athlete)
+  }
+
+  /// Download raw bytes from any URL (no authentication).
+  /// Used for fetching avatar images, etc.
+  pub fn download_bytes(&self, url: &str) -> Result<Vec<u8>, StravaError> {
+    let response = self.client.get(url).send().map_err(Self::classify_reqwest_error)?;
+
+    if !response.status().is_success() {
+      return Err(StravaError::StravaApiResponseError(format!("Download failed with status: {}",
+                                                             response.status())));
     }
 
-    /// GET /athletes/{id}/stats — returns aggregate stats. Uses cache.
-    pub fn get_athlete_stats(&mut self, athlete_id: u64) -> Result<AthleteStats, StravaError> {
-        if let Some(cached) = self.cache.load::<AthleteStats>("stats") {
-            return Ok(cached);
-        }
+    let bytes = response.bytes().map_err(|e| StravaError::StravaApiResponseError(e.to_string()))?;
+    Ok(bytes.to_vec())
+  }
 
-        let response = self.strava_api_get(&format!("athletes/{athlete_id}/stats"))?;
-        let body = response
-            .text()
-            .map_err(|_| StravaError::StravaApiResponseMissingBody)?;
-        log::debug!("JSON:\n{body}");
-
-        let stats: Result<AthleteStats, serde_json::Error> = serde_json::from_str(&body);
-        dbg!(&stats);
-        let stats = stats.map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
-
-        self.cache.save("stats", &stats, None);
-        Ok(stats)
+  /// GET /athletes/{id}/stats — returns aggregate stats. Uses cache.
+  pub fn get_athlete_stats(&mut self, athlete_id: u64) -> Result<AthleteStats, StravaError> {
+    if let Some(cached) = self.cache.load::<AthleteStats>("stats") {
+      return Ok(cached);
     }
 
-    /// GET /athlete/activities — paginated fetch of activities since `after` (unix timestamp).
-    /// Uses cache.
-    pub fn get_activities(&mut self, after: i64) -> Result<Vec<SummaryActivity>, StravaError> {
-        if let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
-            cached.sort_by(|a, b| {
-                b.start_date_local
-                    .as_deref()
-                    .cmp(&a.start_date_local.as_deref())
-            });
-            return Ok(cached);
-        }
+    let response = self.strava_api_get(&format!("athletes/{athlete_id}/stats"))?;
+    let body = response.text().map_err(|_| StravaError::StravaApiResponseMissingBody)?;
+    log::debug!("JSON:\n{body}");
 
-        let mut all_activities: Vec<SummaryActivity> = Vec::new();
-        let mut page = 1u32;
-        const PER_PAGE: u32 = 200;
-        const MAX_PAGES: u32 = 10;
+    let stats: Result<AthleteStats, serde_json::Error> = serde_json::from_str(&body);
+    dbg!(&stats);
+    let stats = stats.map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
 
-        loop {
-            if page > MAX_PAGES {
-                log::warn!("Reached max pages ({MAX_PAGES}), stopping activity fetch");
-                break;
-            }
+    self.cache.save("stats", &stats, None);
+    Ok(stats)
+  }
 
-            let endpoint =
-                format!("athlete/activities?after={after}&per_page={PER_PAGE}&page={page}");
-            let response = self.strava_api_get(&endpoint)?;
-            let body = response
-                .text()
-                .map_err(|_| StravaError::StravaApiResponseMissingBody)?;
-            log::debug!("JSON:\n{body}");
-
-            let activities: Vec<SummaryActivity> = serde_json::from_str(&body)
-                .map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
-
-            if activities.is_empty() {
-                log::info!("No more activities on page {page}");
-                break;
-            }
-
-            log::info!("Page {page}: {} activities", activities.len());
-            all_activities.extend(activities);
-            page += 1;
-        }
-
-        self.cache
-            .save("activities", &all_activities, Some(3 * 3600));
-
-        // Sort newest-first (the API with `after` returns oldest-first)
-        all_activities.sort_by(|a, b| {
-            b.start_date_local
-                .as_deref()
-                .cmp(&a.start_date_local.as_deref())
-        });
-
-        Ok(all_activities)
+  /// GET /athlete/activities — paginated fetch of activities since `after`
+  /// (unix timestamp). Uses cache.
+  pub fn get_activities(&mut self, after: i64) -> Result<Vec<SummaryActivity>, StravaError> {
+    if let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
+      cached.sort_by(|a, b| b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref()));
+      return Ok(cached);
     }
 
-    /// Classify a reqwest error as NetworkUnavailable when it's a connectivity issue.
-    fn classify_reqwest_error(e: reqwest::Error) -> StravaError {
-        if e.is_connect() || e.is_timeout() {
-            StravaError::NetworkUnavailable(e.to_string())
-        } else if e.is_request() {
-            // DNS resolution failures and similar come through as request errors
-            let msg = e.to_string().to_lowercase();
-            if msg.contains("dns") || msg.contains("resolve") || msg.contains("no address") {
-                StravaError::NetworkUnavailable(e.to_string())
-            } else {
-                StravaError::StravaApiResponseError(e.to_string())
-            }
-        } else {
-            StravaError::StravaApiResponseError(e.to_string())
-        }
+    let mut all_activities: Vec<SummaryActivity> = Vec::new();
+    let mut page = 1u32;
+    const PER_PAGE: u32 = 200;
+    const MAX_PAGES: u32 = 10;
+
+    loop {
+      if page > MAX_PAGES {
+        log::warn!("Reached max pages ({MAX_PAGES}), stopping activity fetch");
+        break;
+      }
+
+      let endpoint = format!("athlete/activities?after={after}&per_page={PER_PAGE}&page={page}");
+      let response = self.strava_api_get(&endpoint)?;
+      let body = response.text().map_err(|_| StravaError::StravaApiResponseMissingBody)?;
+      log::debug!("JSON:\n{body}");
+
+      let activities: Vec<SummaryActivity> =
+        serde_json::from_str(&body).map_err(|_| {
+                                     StravaError::StravaApiResponseDeserializationError(body)
+                                   })?;
+
+      if activities.is_empty() {
+        log::info!("No more activities on page {page}");
+        break;
+      }
+
+      log::info!("Page {page}: {} activities", activities.len());
+      all_activities.extend(activities);
+      page += 1;
     }
+
+    self.cache.save("activities", &all_activities, Some(3 * 3600));
+
+    // Sort newest-first (the API with `after` returns oldest-first)
+    all_activities.sort_by(|a, b| {
+                    b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref())
+                  });
+
+    Ok(all_activities)
+  }
+
+  /// Classify a reqwest error as NetworkUnavailable when it's a connectivity
+  /// issue.
+  fn classify_reqwest_error(e: reqwest::Error) -> StravaError {
+    if e.is_connect() || e.is_timeout() {
+      StravaError::NetworkUnavailable(e.to_string())
+    } else if e.is_request() {
+      // DNS resolution failures and similar come through as request errors
+      let msg = e.to_string().to_lowercase();
+      if msg.contains("dns") || msg.contains("resolve") || msg.contains("no address") {
+        StravaError::NetworkUnavailable(e.to_string())
+      } else {
+        StravaError::StravaApiResponseError(e.to_string())
+      }
+    } else {
+      StravaError::StravaApiResponseError(e.to_string())
+    }
+  }
 }

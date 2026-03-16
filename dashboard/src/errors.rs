@@ -4,15 +4,15 @@ pub type Result<T> = std::result::Result<T, DashError>;
 
 #[derive(Error, Debug)]
 pub enum DashError {
-    #[error("Configuration error: {0}")]
-    Config(String),
+  #[error("Configuration error: {0}")]
+  Config(String),
 
-    #[error("Argument error: {0}")]
-    Argument(String),
+  #[error("Argument error: {0}")]
+  Argument(String),
 
-    #[error("Strava API error: {0}")]
-    Strava(#[from] strava::errors::StravaError),
+  #[error("Strava API error: {0}")]
+  Strava(#[from] strava::errors::StravaError),
 
-    #[error("Display error: {0}")]
-    Display(#[from] display::errors::DisplayError),
+  #[error("Display error: {0}")]
+  Display(#[from] display::errors::DisplayError),
 }
