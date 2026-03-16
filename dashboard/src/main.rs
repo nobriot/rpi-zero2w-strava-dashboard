@@ -166,7 +166,7 @@ fn run() -> Result<()> {
 
 /// Run one full cycle: fetch stats → render image → display (or save PNG).
 fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
-    let (stats, avatar) = fetch_stats(config, args.show_all_sports)?;
+    let (stats, avatar, is_offline) = fetch_stats(config, args.show_all_sports)?;
 
     // Read battery status (non-fatal if unavailable)
     let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
@@ -199,6 +199,7 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
         battery.as_ref(),
         &display_config,
         avatar.as_deref(),
+        is_offline,
         scale,
     );
 
@@ -219,6 +220,7 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
                     battery.as_ref(),
                     &display_config,
                     avatar.as_deref(),
+                    is_offline,
                     display::renderer::Scale::new(1),
                 )
             } else {
@@ -251,12 +253,13 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 fn fetch_stats(
     config: &strava::config::Config,
     show_all_sports: bool,
-) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
+) -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>, bool)> {
     match fetch_stats_online(config, show_all_sports) {
-        Ok(result) => Ok(result),
+        Ok((stats, avatar)) => Ok((stats, avatar, false)),
         Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
             log::warn!("Network unavailable ({msg}), falling back to cached data");
-            fetch_stats_from_cache(show_all_sports)
+            let (stats, avatar) = fetch_stats_from_cache(show_all_sports)?;
+            Ok((stats, avatar, true))
         }
         Err(e) => Err(e),
     }

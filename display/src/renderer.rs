@@ -159,6 +159,7 @@ pub fn render_dashboard(
     battery: Option<&BatteryStatus>,
     config: &DisplayConfig,
     avatar: Option<&[u8]>,
+    is_offline: bool,
     s: Scale,
 ) -> RgbImage {
     let mut img = RgbImage::from_pixel(s.u(W), s.u(H), WHITE);
@@ -170,7 +171,7 @@ pub fn render_dashboard(
     let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
     let layout = Layout::compute(stats, config.goals.len(), s);
 
-    draw_header(&mut img, &font_bold, stats, battery, avatar, s);
+    draw_header(&mut img, &font_bold, stats, avatar, s);
 
     let y = draw_sport_bars(
         &mut img,
@@ -195,6 +196,8 @@ pub fn render_dashboard(
         s,
     );
     draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, s);
+
+    draw_battery_indicator(&mut img, &font_bold, battery, is_offline, s);
 
     img
 }
@@ -269,11 +272,49 @@ pub fn render_offline_dashboard(battery: Option<&BatteryStatus>, s: Scale) -> Rg
     img
 }
 
+/// Draw battery percentage and optional "OFFLINE" label at the bottom-right corner.
+fn draw_battery_indicator(
+    img: &mut RgbImage,
+    font_bold: &FontRef,
+    battery: Option<&BatteryStatus>,
+    is_offline: bool,
+    s: Scale,
+) {
+    let bat_pct = battery.map(|b| b.percentage).unwrap_or(100);
+    let bat_fill = bat_pct as f32 / 100.0;
+    let bat_text = format!("{}%", bat_pct);
+    let text_scale = s.px(14.0);
+    let text_w = measure_text_width(font_bold, text_scale, &bat_text) as i32;
+
+    // Stack vertically at bottom-right, left-aligned
+    let icon_w = s.i(24);
+    let gap = s.i(4);
+    let total_w = text_w + gap + icon_w;
+    let x = s.u(W) as i32 - s.i(MARGIN) - total_w;
+
+    if is_offline {
+        let label = "OFFLINE";
+        let label_scale = s.px(12.0);
+        let y_offline = s.u(H) as i32 - s.i(34);
+        draw_text_mut(img, DARK_GRAY, x, y_offline, label_scale, font_bold, label);
+    }
+
+    let y = s.u(H) as i32 - s.i(18);
+    draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
+    icons::draw_battery(
+        img,
+        (x + text_w + gap) as u32,
+        y as u32,
+        BLACK,
+        bat_fill,
+        s.factor(),
+    );
+}
+
 fn draw_header(
     img: &mut RgbImage,
     font_bold: &FontRef,
     stats: &DashboardStats,
-    battery: Option<&BatteryStatus>,
     avatar: Option<&[u8]>,
     s: Scale,
 ) {
@@ -291,28 +332,6 @@ fn draw_header(
     draw_text_mut(img, WHITE, title_x, s.i(13), title_scale, font_bold, &title);
 
     draw_powered_by_logo(img, s);
-
-    if let Some(bat) = battery {
-        let bx = s.u(W) - s.u(60);
-        icons::draw_battery(
-            img,
-            bx,
-            s.u(20),
-            WHITE,
-            bat.percentage as f32 / 100.0,
-            s.factor(),
-        );
-        let bat_text = format!("{}%", bat.percentage);
-        draw_text_mut(
-            img,
-            WHITE,
-            (bx - s.u(40)) as i32,
-            s.i(19),
-            s.px(18.0),
-            font_bold,
-            &bat_text,
-        );
-    }
 }
 
 fn draw_powered_by_logo(img: &mut RgbImage, s: Scale) {
