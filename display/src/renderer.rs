@@ -244,7 +244,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
   let icon_w = s.i(24);
   let gap = s.i(4);
   let total_w = text_w + gap + icon_w;
-  let x = s.u(W) as i32 - s.i(MARGIN) - total_w;
+  let x = s.u(W) as i32 - total_w;
 
   if is_offline {
     let label = "OFFLINE";
@@ -255,7 +255,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
 
   let y = s.u(H) as i32 - s.i(18);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
-  icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, BLACK, bat_fill, s.factor());
+  icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, GREEN, bat_fill, s.factor());
 }
 
 fn draw_header(img: &mut RgbImage,
@@ -781,8 +781,8 @@ fn draw_last_activity(img: &mut RgbImage,
                             font_emoji,
                             &line1);
 
-    let line2 = format!("{:.1}km  ·  {}  ·  {}",
-                        last.distance_km, last.pace_or_speed, last.moving_time_display,);
+    let line2 = format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
+                        last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos);
     draw_text_mut(img,
                   DARK_GRAY,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),

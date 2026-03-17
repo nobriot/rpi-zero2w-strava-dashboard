@@ -66,6 +66,7 @@ pub struct ActivityHighlight {
   pub moving_time_display: String,
   pub pace_or_speed:       String,
   pub date:                String,
+  pub kudos:               u32,
 }
 
 impl DashboardStats {
@@ -256,7 +257,8 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
                       distance_km: a.distance_km(),
                       moving_time_display: a.format_moving_time(),
                       pace_or_speed,
-                      date: format_date(&a.start_date_local) }
+                      date: format_date(&a.start_date_local),
+                      kudos: a.kudos_count }
 }
 
 /// Race distance buckets for finding best running efforts.
