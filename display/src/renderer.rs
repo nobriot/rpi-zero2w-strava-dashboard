@@ -198,15 +198,8 @@ pub fn render_offline_dashboard(battery: Option<&BatteryStatus>, s: Scale) -> Rg
                 &font_bold,
                 "STRAVA DASHBOARD");
 
-  // Battery icon if available
-  if let Some(bat) = battery {
-    icons::draw_battery(&mut img,
-                        s.u(W) - s.u(70),
-                        s.u(16),
-                        WHITE,
-                        bat.percentage as f32 / 100.0,
-                        s.factor());
-  }
+  // Battery indicator at bottom-right (same as regular dashboard)
+  draw_battery_indicator(&mut img, &font_bold, battery, true, s);
 
   // Centered offline message
   let msg = "OFFLINE";
@@ -255,7 +248,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
 
   let y = s.u(H) as i32 - s.i(18);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
-  icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, GREEN, bat_fill, s.factor());
+  icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, BLACK, GREEN, bat_fill, s.factor());
 }
 
 fn draw_header(img: &mut RgbImage,

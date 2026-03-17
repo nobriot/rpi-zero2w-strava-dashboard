@@ -125,7 +125,15 @@ pub fn draw_checkered_flag(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, s
 }
 
 /// Draw a battery outline at (x, y) with fill level 0.0–1.0.
-pub fn draw_battery(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, fill: f32, scale: u32) {
+/// `outline_color` is used for the frame, `fill_color` for the proportional
+/// fill.
+pub fn draw_battery(img: &mut RgbImage,
+                    x: u32,
+                    y: u32,
+                    outline_color: Rgb<u8>,
+                    fill_color: Rgb<u8>,
+                    fill: f32,
+                    scale: u32) {
   let outline: &[(u32, u32)] = &[(1, 2),
                                  (2, 2),
                                  (3, 2),
@@ -174,7 +182,7 @@ pub fn draw_battery(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, fill: f3
         let ix = x + px * scale + dx;
         let iy = y + py * scale + dy;
         if ix < img.width() && iy < img.height() {
-          img.put_pixel(ix, iy, color);
+          img.put_pixel(ix, iy, outline_color);
         }
       }
     }
@@ -187,7 +195,7 @@ pub fn draw_battery(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, fill: f3
           let ix = x + (2 + col) * scale + dx;
           let iy = y + row * scale + dy;
           if ix < img.width() && iy < img.height() {
-            img.put_pixel(ix, iy, color);
+            img.put_pixel(ix, iy, fill_color);
           }
         }
       }
