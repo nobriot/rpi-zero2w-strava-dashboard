@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Set file permissions to owner-only read/write (0o600) to protect
+/// credentials.
+#[cfg(unix)]
+fn restrict_permissions(path: &Path) {
+  use std::os::unix::fs::PermissionsExt;
+  let perms = fs::Permissions::from_mode(0o600);
+  if let Err(e) = fs::set_permissions(path, perms) {
+    log::warn!("Failed to set permissions on {}: {e}", path.display());
+  }
+}
+
 const CONFIG_EXAMPLE: &str = include_str!("../../config.example.toml");
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -116,6 +127,8 @@ impl Config {
       if let Err(e) = fs::write(&path, CONFIG_EXAMPLE) {
         return Err(format!("Failed to write config template: {e}"));
       }
+      #[cfg(unix)]
+      restrict_permissions(&path);
 
       return Err(format!("Config file not found. A template has been created at: {}\nPlease fill in your Strava API credentials.",
                          path.display()));
@@ -171,9 +184,12 @@ impl Config {
 
     let contents = format!("# Strava API credentials\n# See docs/strava.md for setup instructions\n\n{toml_string}");
 
-    fs::write(Self::config_path(), contents).map_err(|e| format!("Failed to write config: {e}"))?;
+    let path = Self::config_path();
+    fs::write(&path, contents).map_err(|e| format!("Failed to write config: {e}"))?;
+    #[cfg(unix)]
+    restrict_permissions(&path);
 
-    log::info!("Config saved to {}", Self::config_path().display());
+    log::info!("Config saved to {}", path.display());
     Ok(())
   }
 
