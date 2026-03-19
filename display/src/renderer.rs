@@ -174,7 +174,7 @@ pub fn render_dashboard(stats: &DashboardStats,
                                y,
                                &layout,
                                s);
-  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, s);
+  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, s);
 
   draw_battery_indicator(&mut img, &font_bold, battery, is_offline, s);
 
@@ -744,6 +744,7 @@ fn draw_last_activity(img: &mut RgbImage,
                       font_emoji: &FontRef,
                       stats: &DashboardStats,
                       y_start: i32,
+                      is_offline: bool,
                       s: Scale) {
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
@@ -784,26 +785,58 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Polyline immediately right of text
+    // Polyline: boxed between text and battery indicator
     let line1_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line1, s.u(16));
     let line2_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line2, s.u(15));
     let text_right = s.i(MARGIN) + line1_w.max(line2_w) + s.i(20);
-    draw_polyline(img, stats, y, text_right, s);
+    draw_polyline(img, stats, y, text_right, is_offline, s);
   }
 }
 
 // --- Polyline (orange, right of last-activity text) ---
 
-fn draw_polyline(img: &mut RgbImage, stats: &DashboardStats, y_start: i32, x_start: i32, s: Scale) {
+fn draw_polyline(img: &mut RgbImage,
+                 stats: &DashboardStats,
+                 y_start: i32,
+                 x_start: i32,
+                 is_offline: bool,
+                 s: Scale) {
   let points = &stats.last_activity_polyline;
   if points.is_empty() {
     return;
   }
 
+  // Reserve bottom-right corner for the battery indicator.
+  // Battery block is roughly 70px wide; with OFFLINE label it starts 38px from
+  // bottom, otherwise 22px.
+  let bat_reserve_w = s.u(76);
+  let bat_reserve_h = if is_offline { s.u(38) } else { s.u(22) };
+
   let area_x = x_start.max(s.i(MARGIN)) as u32;
   let area_y = y_start as u32;
-  let area_w = (s.u(W) - s.u(8)).saturating_sub(area_x);
-  let area_h: u32 = s.u(H).saturating_sub(area_y + s.u(8));
+  let area_right = s.u(W) - s.u(MARGIN as u32);
+  let area_bottom = s.u(H) - s.u(MARGIN as u32);
+  let area_w = area_right.saturating_sub(area_x);
+  let area_h = area_bottom.saturating_sub(area_y);
+
+  // Shrink the polyline area so it does not overlap the battery block in the
+  // bottom-right corner.  We only need to shrink if the polyline box actually
+  // reaches the battery region.  To keep the logic simple we trim from the
+  // right when the bottom of the area is in the battery zone, or trim from the
+  // bottom when the right edge is in the battery zone.
+  let bat_x = s.u(W) - bat_reserve_w;
+  let bat_y = s.u(H) - bat_reserve_h;
+
+  let area_w = if area_y + area_h > bat_y {
+    area_w.min(bat_x.saturating_sub(area_x))
+  } else {
+    area_w
+  };
+  let area_h = if area_x + area_w > bat_x {
+    area_h.min(bat_y.saturating_sub(area_y))
+  } else {
+    area_h
+  };
 
   if area_h < s.u(20) || area_w < s.u(20) {
     return;
