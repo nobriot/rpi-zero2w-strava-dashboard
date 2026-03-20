@@ -170,9 +170,9 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
   };
 
   // Render
-  let display_config =
-    display::renderer::DisplayConfig { goals:              config.display.goals.clone(),
-                                       polyline_thickness: config.display.polyline_thickness, };
+  let polyline_thickness = args.polyline_thickness.unwrap_or(config.display.polyline_thickness);
+  let display_config = display::renderer::DisplayConfig { goals: config.display.goals.clone(),
+                                                          polyline_thickness };
   let scale = display::renderer::Scale::new(args.scale);
   let img = display::renderer::render_dashboard(&stats,
                                                 battery.as_ref(),

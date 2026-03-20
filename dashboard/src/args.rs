@@ -35,4 +35,8 @@ pub struct Args {
   /// Resolution scale factor for PNG export (default: 1, use 2 for hi-res)
   #[arg(long, default_value = "1", value_name = "N")]
   pub scale: u32,
+
+  /// Polyline thickness in pixels (overrides config.toml)
+  #[arg(long, value_name = "PX")]
+  pub polyline_thickness: Option<u32>,
 }
