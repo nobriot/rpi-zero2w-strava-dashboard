@@ -62,17 +62,19 @@ impl Scale {
 
 /// Dashboard display configuration.
 pub struct DisplayConfig {
-  pub goals: Vec<GoalConfig>,
+  pub goals:              Vec<GoalConfig>,
+  pub polyline_thickness: u32,
 }
 
 impl Default for DisplayConfig {
   fn default() -> Self {
-    Self { goals: vec![GoalConfig { sport: SportType::Ride,
-                                    km:    5000.0, },
-                       GoalConfig { sport: SportType::Run,
-                                    km:    500.0, },
-                       GoalConfig { sport: SportType::Swim,
-                                    km:    30.0, },], }
+    Self { goals:              vec![GoalConfig { sport: SportType::Ride,
+                                                 km:    5000.0, },
+                                    GoalConfig { sport: SportType::Run,
+                                                 km:    500.0, },
+                                    GoalConfig { sport: SportType::Swim,
+                                                 km:    30.0, },],
+           polyline_thickness: 2, }
   }
 }
 
@@ -174,7 +176,7 @@ pub fn render_dashboard(stats: &DashboardStats,
                                y,
                                &layout,
                                s);
-  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, s);
+  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, s);
 
   draw_battery_indicator(&mut img, &font_bold, battery, is_offline, s);
 
@@ -745,6 +747,7 @@ fn draw_last_activity(img: &mut RgbImage,
                       stats: &DashboardStats,
                       y_start: i32,
                       is_offline: bool,
+                      config: &DisplayConfig,
                       s: Scale) {
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
@@ -785,11 +788,11 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Polyline: boxed between text and battery indicator
-    let line1_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line1, s.u(16));
-    let line2_w = s.u(ICON_SZ) as i32 + s.i(6) + approx_text_width(&line2, s.u(15));
-    let text_right = s.i(MARGIN) + line1_w.max(line2_w) + s.i(20);
-    draw_polyline(img, stats, y, text_right, is_offline, s);
+    // Polyline: starts right of the "LAST ACTIVITY" title, overlapping the
+    // detail text lines vertically — this gives it maximum horizontal space.
+    let title_w = approx_text_width("LAST ACTIVITY", s.u(18));
+    let polyline_x = s.i(MARGIN) + title_w + s.i(12);
+    draw_polyline(img, stats, y, polyline_x, is_offline, config, s);
   }
 }
 
@@ -800,6 +803,7 @@ fn draw_polyline(img: &mut RgbImage,
                  y_start: i32,
                  x_start: i32,
                  is_offline: bool,
+                 config: &DisplayConfig,
                  s: Scale) {
   let points = &stats.last_activity_polyline;
   if points.is_empty() {
@@ -876,7 +880,8 @@ fn draw_polyline(img: &mut RgbImage,
     let x1 = area_x as f32 + off_x as f32 + ((lon1 - min_lon) / lon_range * draw_w) as f32;
     let y1 = area_y as f32 + off_y as f32 + ((1.0 - (lat1 - min_lat) / lat_range) * draw_h) as f32;
 
-    for offset in 0..s.factor() {
+    let thickness = s.u(config.polyline_thickness.max(1));
+    for offset in 0..thickness {
       draw_line_segment_mut(img, (x0 + offset as f32, y0), (x1 + offset as f32, y1), ORANGE);
     }
   }

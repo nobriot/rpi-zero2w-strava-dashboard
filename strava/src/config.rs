@@ -66,6 +66,11 @@ pub struct DisplayConfig {
   /// a row.
   #[serde(default = "default_goals")]
   pub goals: Vec<GoalConfig>,
+
+  /// Thickness of the polyline drawn for the last activity, in pixels
+  /// (default: 2).
+  #[serde(default = "default_polyline_thickness")]
+  pub polyline_thickness: u32,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -76,6 +81,9 @@ fn default_quiet_start() -> u32 {
 }
 fn default_quiet_end() -> u32 {
   8
+}
+fn default_polyline_thickness() -> u32 {
+  2
 }
 fn default_goals() -> Vec<GoalConfig> {
   vec![GoalConfig { sport: SportType::Run,
@@ -91,7 +99,8 @@ impl Default for DisplayConfig {
     Self { sleep_interval_secs: default_sleep_interval(),
            quiet_start_hour:    default_quiet_start(),
            quiet_end_hour:      default_quiet_end(),
-           goals:               default_goals(), }
+           goals:               default_goals(),
+           polyline_thickness:  default_polyline_thickness(), }
   }
 }
 
