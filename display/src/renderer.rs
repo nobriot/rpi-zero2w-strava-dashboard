@@ -871,18 +871,56 @@ fn draw_polyline(img: &mut RgbImage,
     (dw, dh, (area_w as f64 - dw) / 2.0, 0.0)
   };
 
-  for window in points.windows(2) {
-    let (lat0, lon0) = window[0];
-    let (lat1, lon1) = window[1];
+  let thickness = s.u(config.polyline_thickness.max(1));
+  let radius = thickness as f32 / 2.0;
+  let r_sq = radius * radius;
+  let (img_w, img_h) = (img.width(), img.height());
 
-    let x0 = area_x as f32 + off_x as f32 + ((lon0 - min_lon) / lon_range * draw_w) as f32;
-    let y0 = area_y as f32 + off_y as f32 + ((1.0 - (lat0 - min_lat) / lat_range) * draw_h) as f32;
-    let x1 = area_x as f32 + off_x as f32 + ((lon1 - min_lon) / lon_range * draw_w) as f32;
-    let y1 = area_y as f32 + off_y as f32 + ((1.0 - (lat1 - min_lat) / lat_range) * draw_h) as f32;
+  // Map all points to pixel coordinates once.
+  let px_points: Vec<(f32, f32)> =
+    points.iter()
+          .map(|&(lat, lon)| {
+            let x = area_x as f32 + off_x as f32 + ((lon - min_lon) / lon_range * draw_w) as f32;
+            let y =
+              area_y as f32 + off_y as f32 + ((1.0 - (lat - min_lat) / lat_range) * draw_h) as f32;
+            (x, y)
+          })
+          .collect();
 
-    let thickness = s.u(config.polyline_thickness.max(1));
-    for offset in 0..thickness {
-      draw_line_segment_mut(img, (x0 + offset as f32, y0), (x1 + offset as f32, y1), ORANGE);
+  for window in px_points.windows(2) {
+    let (x0, y0) = window[0];
+    let (x1, y1) = window[1];
+
+    // Perpendicular offset for uniform thickness.
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let len = (dx * dx + dy * dy).sqrt();
+    let (nx, ny) = if len > 0.0 { (-dy / len, dx / len) } else { (1.0, 0.0) };
+    let half = (thickness as f32 - 1.0) / 2.0;
+    for i in 0..thickness {
+      let off = i as f32 - half;
+      let ox = nx * off;
+      let oy = ny * off;
+      draw_line_segment_mut(img, (x0 + ox, y0 + oy), (x1 + ox, y1 + oy), ORANGE);
+    }
+  }
+
+  // Draw filled circles at each vertex to cover gaps at joints.
+  if thickness > 1 {
+    for &(cx, cy) in &px_points {
+      let ix_min = ((cx - radius) as i32).max(0);
+      let ix_max = ((cx + radius) as i32 + 1).min(img_w as i32);
+      let iy_min = ((cy - radius) as i32).max(0);
+      let iy_max = ((cy + radius) as i32 + 1).min(img_h as i32);
+      for iy in iy_min..iy_max {
+        for ix in ix_min..ix_max {
+          let dx = ix as f32 - cx;
+          let dy = iy as f32 - cy;
+          if dx * dx + dy * dy <= r_sq {
+            img.put_pixel(ix as u32, iy as u32, ORANGE);
+          }
+        }
+      }
     }
   }
 }
