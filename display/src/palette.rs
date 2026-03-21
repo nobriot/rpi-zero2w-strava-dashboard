@@ -49,6 +49,23 @@ pub fn nearest_color(pixel: Rgb<u8>) -> EpdColor {
                .unwrap()
 }
 
+/// Downscale a supersampled image to the native display resolution, then
+/// quantize.  The downscale step uses area averaging, which makes anti-aliased
+/// font edges darker so they survive the 6-color nearest-color snap as black
+/// instead of vanishing to white.
+pub fn quantize_supersampled_to_epd_buffer(img: &image::RgbImage,
+                                           native_w: u32,
+                                           native_h: u32)
+                                           -> Vec<u8> {
+  let (w, h) = img.dimensions();
+  if w == native_w && h == native_h {
+    return quantize_to_epd_buffer(img);
+  }
+  let downscaled =
+    image::imageops::resize(img, native_w, native_h, image::imageops::FilterType::Triangle);
+  quantize_to_epd_buffer(&downscaled)
+}
+
 /// Quantize an RGB image to the 6-color palette and pack into the EPD wire
 /// format. Returns a buffer of WIDTH*HEIGHT/2 bytes (2 pixels per byte, high
 /// nibble first).

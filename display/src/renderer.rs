@@ -131,8 +131,8 @@ impl Layout {
     Layout { bar_section_h:  s.i(34 + bar_extra),
              bar_h:          s.u(14),
              lf_entry_h:     s.i(34 + lf_extra),
-             lf_detail_font: s.f(if slack > 60 { 16.0 } else { 15.0 }),
-             lf_name_font:   s.f(if slack > 60 { 14.0 } else { 13.0 }), }
+             lf_detail_font: s.f(if slack > 60 { 17.0 } else { 16.0 }),
+             lf_name_font:   s.f(if slack > 60 { 15.0 } else { 14.0 }), }
   }
 }
 
@@ -385,7 +385,7 @@ fn draw_sport_bars(img: &mut RgbImage,
                       s.f(16.0),
                       s.f(14.0),
                       s.f(14.0),
-                      s.f(18.0),
+                      s.f(20.0),
                       y,
                       s);
         y += layout.bar_section_h;
@@ -405,7 +405,7 @@ fn draw_sport_bars(img: &mut RgbImage,
                     s.f(16.0),
                     s.f(14.0),
                     s.f(14.0),
-                    s.f(18.0),
+                    s.f(20.0),
                     y,
                     s);
       y += layout.bar_section_h;
@@ -424,9 +424,9 @@ fn draw_sport_bars(img: &mut RgbImage,
                     s.i(MARGIN),
                     half_w,
                     s.f(14.0),
-                    s.f(12.0),
-                    s.f(12.0),
-                    s.f(16.0),
+                    s.f(13.0),
+                    s.f(13.0),
+                    s.f(18.0),
                     y,
                     s);
       draw_goal_bar(img,
@@ -439,9 +439,9 @@ fn draw_sport_bars(img: &mut RgbImage,
                     right_x,
                     half_w,
                     s.f(14.0),
-                    s.f(12.0),
-                    s.f(12.0),
-                    s.f(16.0),
+                    s.f(13.0),
+                    s.f(13.0),
+                    s.f(18.0),
                     y,
                     s);
       y += layout.bar_section_h;
@@ -591,13 +591,13 @@ fn draw_totals_row(img: &mut RgbImage,
 
   // Extra space before separator
   let sep_y = y_start + s.i(4);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), LIGHT_GRAY);
+  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
 
   // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
   let y = sep_y + s.i(8);
   icons::draw_bar_chart(img, s.u(MARGIN as u32), (y - s.i(6)) as u32, ORANGE, s.factor());
   let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
-  draw_text_mut(img, ORANGE, s.i(MARGIN) + icon_w, y, s.px(18.0), font_bold, TOTALS);
+  draw_text_mut(img, ORANGE, s.i(MARGIN) + icon_w, y, s.px(20.0), font_bold, TOTALS);
 
   let center_text = format!("{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
                             stats.activity_count,
@@ -628,7 +628,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let half_w = content_w / 2;
 
   let sep_y = y_start + s.i(2);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), LIGHT_GRAY);
+  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
 
   let y = sep_y + s.i(6);
   let detail_sz = PxScale::from(layout.lf_detail_font);
@@ -670,7 +670,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
                               left_y + s.i(20),
                               name_sz,
-                              font,
+                              font_bold,
                               font_emoji,
                               &line2);
     } else if stats.show_all_sports {
@@ -715,7 +715,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               right_x + s.u(ICON_SZ) as i32 + s.i(12),
                               right_y + s.i(20),
                               name_sz,
-                              font,
+                              font_bold,
                               font_emoji,
                               &line2);
     } else {
@@ -733,7 +733,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
   // Vertical divider
   let div_x = (s.i(MARGIN) + half_w as i32) as f32;
-  draw_line_segment_mut(img, (div_x, y as f32), (div_x, left_y.max(right_y) as f32), LIGHT_GRAY);
+  draw_line_segment_mut(img, (div_x, y as f32), (div_x, left_y.max(right_y) as f32), BLACK);
 
   left_y.max(right_y) + s.i(4)
 }
@@ -752,13 +752,13 @@ fn draw_last_activity(img: &mut RgbImage,
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
   let sep_y = y_start + s.i(2);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), LIGHT_GRAY);
+  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
 
   let y = sep_y + s.i(6);
 
   if let Some(ref last) = stats.last_activity {
     // "LAST ACTIVITY" title
-    draw_text_mut(img, ORANGE, s.i(MARGIN), y, s.px(18.0), font_bold, "LAST ACTIVITY");
+    draw_text_mut(img, ORANGE, s.i(MARGIN), y, s.px(20.0), font_bold, "LAST ACTIVITY");
 
     // First line: sport icon + name · date
     let line1_x = s.i(MARGIN);
@@ -784,8 +784,8 @@ fn draw_last_activity(img: &mut RgbImage,
                   DARK_GRAY,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                   y + s.i(44),
-                  s.px(15.0),
-                  font,
+                  s.px(16.0),
+                  font_bold,
                   &line2);
 
     // Polyline: starts right of the "LAST ACTIVITY" title, overlapping the

@@ -117,13 +117,9 @@ fn run() -> Result<()> {
 
         match display::epd7in3e::Epd7in3e::new() {
           Ok(mut epd) => {
-            let epd_img = if args.scale > 1 {
-              display::renderer::render_offline_dashboard(battery.as_ref(),
-                                                          display::renderer::Scale::new(1))
-            } else {
-              img.clone()
-            };
-            let buf = display::palette::quantize_to_epd_buffer(&epd_img);
+            let ss_scale = display::renderer::Scale::new(2);
+            let epd_img = display::renderer::render_offline_dashboard(battery.as_ref(), ss_scale);
+            let buf = display::palette::quantize_supersampled_to_epd_buffer(&epd_img, 800, 480);
             let _ = epd.display_image(&buf);
             let _ = epd.sleep();
           },
@@ -188,20 +184,20 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
     log::info!("Dashboard saved to {path}");
   }
 
-  // Try to push to e-paper display (always needs 800x480)
+  // Try to push to e-paper display.
+  // Always render at 2x and downsample — the area averaging darkens anti-aliased
+  // font edges so they survive the 6-color quantization as black instead of
+  // vanishing to white.
   match display::epd7in3e::Epd7in3e::new() {
     Ok(mut epd) => {
-      let epd_img = if args.scale > 1 {
-        display::renderer::render_dashboard(&stats,
-                                            battery.as_ref(),
-                                            &display_config,
-                                            avatar.as_deref(),
-                                            is_offline,
-                                            display::renderer::Scale::new(1))
-      } else {
-        img.clone()
-      };
-      let buf = display::palette::quantize_to_epd_buffer(&epd_img);
+      let ss_scale = display::renderer::Scale::new(2);
+      let epd_img = display::renderer::render_dashboard(&stats,
+                                                        battery.as_ref(),
+                                                        &display_config,
+                                                        avatar.as_deref(),
+                                                        is_offline,
+                                                        ss_scale);
+      let buf = display::palette::quantize_supersampled_to_epd_buffer(&epd_img, 800, 480);
       epd.display_image(&buf)?;
       epd.sleep()?;
       log::info!("E-paper display updated");
