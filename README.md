@@ -1,6 +1,8 @@
 # RPi Zero 2W Strava Dash
 
-A Strava dashboard for Raspberry Pi Zero 2W with Waveshare 7.3" e-paper display.
+A Strava dashboard for
+[WaveShare Raspberry Pi Zero 2W Photo Painter](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
+with e-paper display.
 
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -150,7 +152,7 @@ Config file: `~/.config/rpi-zero2w-strava-dash/config.toml`
 [strava]
 client_id = "YOUR_CLIENT_ID"
 client_secret = "YOUR_CLIENT_SECRET"
-refresh_token = "YOUR_REFRESH_TOKEN"
+refresh_token = "YOUR_REFRESH_TOKEN" # Optional
 
 [display]
 sleep_interval_secs = 10800  # 3 hours
