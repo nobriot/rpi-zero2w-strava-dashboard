@@ -1,4 +1,4 @@
-# RPi Zero 2W Strava Dash
+# WaveShare RPI Zero 2W Strava Dashboard
 
 A Strava dashboard for
 [WaveShare Raspberry Pi Zero 2W Photo Painter](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
@@ -34,20 +34,21 @@ Displays your Strava stats on a 7.3" 6-color e-paper display:
 
 ### 1. Prepare the RPi SD Card
 
-Flash **Raspberry Pi OS** (64-bit, Bookworm) to an SD card. Boot the Pi and ensure SSH is enabled.
+Those displays come with **Raspberry Pi OS** pre-flashed, and some repos
+configured. The RPI has the default password and SSH enabled.
 
-### 2. Set Up USB Gadget Mode
+Those bandits use NetworkManager
 
-On the RPi (via SSH or directly):
+TODO: Explain here how to add a nmconnection file to add your WiFi
 
-```bash
-sudo bash install/setup-usb-gadget.sh
-sudo reboot
-```
+### 2. Setup your Strava API Tokens
 
-This configures the Pi as a USB serial gadget. After reboot, plugging the Pi into a computer via USB creates a serial port.
 
-### 3. Build & Deploy
+TODO: Write me
+Run the dashboard on the dev machine with --auth. It will generate a config
+file that you have to copy over on the rpi.
+
+### 2. Build & Deploy
 
 On your dev machine:
 
@@ -60,54 +61,12 @@ cross build --release --target aarch64-unknown-linux-gnu
 
 # Copy binaries to RPi
 scp target/aarch64-unknown-linux-gnu/release/rpi-zero2w-strava-dash pi@<host>:/usr/local/bin/
-scp target/aarch64-unknown-linux-gnu/release/strava-usbd pi@<host>:/usr/local/bin/
 
 # Copy systemd services
 scp install/strava-dashboard.service pi@<host>:/etc/systemd/system/
-scp install/strava-usbd.service pi@<host>:/etc/systemd/system/
 
 # Enable services on the RPi (via SSH)
-ssh pi@<host> 'sudo systemctl daemon-reload && sudo systemctl enable --now strava-usbd strava-dashboard'
-```
-
-### 4. Configure via USB Console
-
-Plug the RPi into your computer via USB, then:
-
-```bash
-# Build the console tool for your dev machine
-cargo build --release -p console
-
-# Run the setup wizard
-./target/release/strava-console
-```
-
-The wizard auto-detects the USB serial device and walks you through:
-1. **WiFi setup** — scans and connects to a network
-2. **Strava credentials** — enters your API client ID and secret
-3. **OAuth authorization** — opens a browser to authorize, pushes tokens to Pi
-
-Steps that are already configured are automatically skipped.
-
-### 5. Console REPL
-
-After the wizard, you drop into an interactive console:
-
-```
-> help
-Commands:
-  status              Show system status (WiFi, config, auth, battery)
-  wifi                Show WiFi connection status
-  wifi scan           Scan for available networks
-  wifi add [ssid]     Connect to a WiFi network
-  wifi forget <ssid>  Forget a saved network
-  config show         Show current config.toml on device
-  config push <file>  Push a config.toml file to device
-  auth                Run Strava OAuth flow and push token to device
-  refresh             Trigger dashboard refresh (clears cache)
-  ping                Test connection to device
-  help                Show this help
-  quit                Exit console
+ssh pi@<host> 'sudo systemctl daemon-reload && sudo systemctl enable --now strava-dashboard'
 ```
 
 ---
@@ -120,26 +79,7 @@ Cargo workspace with 5 crates:
 |-------|------|---------|---------|
 | **`strava`** | library | — | Strava API client, OAuth, caching, stats |
 | **`display`** | library | — | E-paper renderer, hardware drivers (SPI, I2C) |
-| **`protocol`** | library | — | Shared USB serial protocol types |
 | **`dashboard`** | binary | RPi | Main loop: fetch → render → display |
-| **`usbd`** | binary | RPi | USB serial daemon (WiFi, config management) |
-| **`console`** | binary | Dev machine | Interactive setup and REPL |
-
-### Data Flow
-
-```
-[Dev Machine]                    USB Serial                    [RPi Zero 2W]
-strava-console  ←── JSON lines ──→  strava-usbd
-                                         │
-                                    config.toml
-                                         │
-                                    rpi-zero2w-strava-dash
-                                    (dashboard binary)
-                                         │
-                                   ┌─────┴──────┐
-                                   │             │
-                              Strava API    E-paper Display
-```
 
 ---
 
@@ -203,4 +143,6 @@ Requires Rust edition 2024 (rust-version 1.93+).
 
 ## Credits
 
-Inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter)
+Totally inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter).
+
+See also: [Statistics-for-Strava](https://github.com/robiningelbrecht/statistics-for-strava).
