@@ -21,7 +21,7 @@ const STYLES: styling::Styles =
 static PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() {
-  env_logger::init();
+  env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
   let result = run();
 

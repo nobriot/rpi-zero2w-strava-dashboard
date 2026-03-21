@@ -16,7 +16,8 @@ const WIDTH: u16 = 800;
 const HEIGHT: u16 = 480;
 
 /// Maximum time to wait for the BUSY pin to go HIGH (ready).
-const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
+/// ACeP refresh takes ~30s; allow headroom.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct Epd7in3e {
   spi:  Spi,
@@ -102,60 +103,92 @@ impl Epd7in3e {
     Ok(())
   }
 
-  /// Initialize the epd7in3e display controller.
-  /// Command sequence ported from Waveshare C driver.
+  /// Initialize the epd7in3e ACeP display controller.
+  /// Command sequence ported from Waveshare C reference driver (EPD_7in3e.c).
   fn init_display(&mut self) -> Result<(), DisplayError> {
     self.wait_busy()?;
+    thread::sleep(Duration::from_millis(30));
 
-    // Software reset
-    self.send_command(0x12)?;
-    thread::sleep(Duration::from_millis(100));
-    self.wait_busy()?;
+    // CMDH
+    self.send_command(0xAA)?;
+    self.send_data(&[0x49, 0x55, 0x20, 0x08, 0x09, 0x18])?;
 
-    // Set gate driver output
     self.send_command(0x01)?;
-    self.send_data(&[0xDF, 0x01, 0x00])?;
+    self.send_data(&[0x3F])?;
 
-    // Set gate driving voltage
+    self.send_command(0x00)?;
+    self.send_data(&[0x5F, 0x69])?;
+
     self.send_command(0x03)?;
-    self.send_data(&[0x00])?;
+    self.send_data(&[0x00, 0x54, 0x00, 0x44])?;
 
-    // Set source driving voltage
-    self.send_command(0x04)?;
-    self.send_data(&[0x41, 0xA8, 0x32])?;
+    self.send_command(0x05)?;
+    self.send_data(&[0x40, 0x1F, 0x1F, 0x2C])?;
 
-    // Data entry mode: Y decrement, X increment
-    self.send_command(0x11)?;
+    self.send_command(0x06)?;
+    self.send_data(&[0x6F, 0x1F, 0x17, 0x49])?;
+
+    self.send_command(0x08)?;
+    self.send_data(&[0x6F, 0x1F, 0x1F, 0x22])?;
+
+    // PLL
+    self.send_command(0x30)?;
     self.send_data(&[0x03])?;
 
-    // Set RAM X address range
-    self.send_command(0x44)?;
-    self.send_data(&[0x00, 0x31])?; // 0x00 to 0x31 (50 bytes = 800/16)
+    // VCOM
+    self.send_command(0x50)?;
+    self.send_data(&[0x3F])?;
 
-    // Set RAM Y address range
-    self.send_command(0x45)?;
-    self.send_data(&[0xDF, 0x01, 0x00, 0x00])?; // 0x01DF (479) to 0x0000
+    // TCON
+    self.send_command(0x60)?;
+    self.send_data(&[0x02, 0x00])?;
 
-    // Border waveform control
-    self.send_command(0x3C)?;
+    // Resolution: 800x480
+    self.send_command(0x61)?;
+    self.send_data(&[0x03, 0x20, 0x01, 0xE0])?;
+
+    self.send_command(0x84)?;
     self.send_data(&[0x01])?;
 
-    // Temperature sensor
-    self.send_command(0x18)?;
-    self.send_data(&[0x80])?;
+    self.send_command(0xE3)?;
+    self.send_data(&[0x2F])?;
 
-    // Display update control
-    self.send_command(0x22)?;
-    self.send_data(&[0xCF])?;
+    // POWER_ON
+    self.send_command(0x04)?;
+    self.wait_busy()?;
 
     log::info!("EPD initialized ({}x{})", WIDTH, HEIGHT);
     Ok(())
   }
 
+  /// Trigger display refresh after writing image data.
+  /// Sequence from Waveshare C reference driver (EPD_7IN3E_TurnOnDisplay).
+  fn turn_on_display(&mut self) -> Result<(), DisplayError> {
+    // POWER_ON
+    self.send_command(0x04)?;
+    self.wait_busy()?;
+
+    // Booster re-setting
+    self.send_command(0x06)?;
+    self.send_data(&[0x6F, 0x1F, 0x17, 0x49])?;
+
+    // DISPLAY_REFRESH
+    self.send_command(0x12)?;
+    self.send_data(&[0x00])?;
+    self.wait_busy()?;
+
+    // POWER_OFF
+    self.send_command(0x02)?;
+    self.send_data(&[0x00])?;
+    self.wait_busy()?;
+
+    Ok(())
+  }
+
   /// Display a 6-color packed image buffer.
   /// Buffer format: 2 pixels per byte (high nibble = left pixel, low nibble =
-  /// right pixel). Colors: 0=Black, 1=White, 2=Green, 3=Blue, 4=Red,
-  /// 5=Yellow. Expected length: WIDTH * HEIGHT / 2 = 192000 bytes.
+  /// right pixel). Colors: 0=Black, 1=White, 2=Yellow, 3=Red, 5=Blue,
+  /// 6=Green. Expected length: WIDTH * HEIGHT / 2 = 192000 bytes.
   pub fn display_image(&mut self, buf: &[u8]) -> Result<(), DisplayError> {
     let expected_len = (WIDTH as usize * HEIGHT as usize) / 2;
     if buf.len() != expected_len {
@@ -165,23 +198,12 @@ impl Epd7in3e {
 
     log::info!("Sending image data to EPD...");
 
-    // Set RAM X counter
-    self.send_command(0x4E)?;
-    self.send_data(&[0x00])?;
-
-    // Set RAM Y counter
-    self.send_command(0x4F)?;
-    self.send_data(&[0xDF, 0x01])?;
-
-    // Write RAM
-    self.send_command(0x24)?;
+    // Write image data (command 0x10)
+    self.send_command(0x10)?;
     self.send_data(buf)?;
 
     // Trigger display refresh
-    self.send_command(0x22)?;
-    self.send_data(&[0xCF])?;
-    self.send_command(0x20)?;
-    self.wait_busy()?;
+    self.turn_on_display()?;
 
     log::info!("EPD refresh complete");
     Ok(())
@@ -197,9 +219,15 @@ impl Epd7in3e {
 
   /// Put the display into deep sleep mode for power saving.
   pub fn sleep(&mut self) -> Result<(), DisplayError> {
-    self.send_command(0x10)?;
-    self.send_data(&[0x01])?;
-    thread::sleep(Duration::from_millis(100));
+    // POWER_OFF
+    self.send_command(0x02)?;
+    self.send_data(&[0x00])?;
+    self.wait_busy()?;
+
+    // DEEP_SLEEP
+    self.send_command(0x07)?;
+    self.send_data(&[0xA5])?;
+
     self.power_off();
     log::info!("EPD entered deep sleep");
     Ok(())

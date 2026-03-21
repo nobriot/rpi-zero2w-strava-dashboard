@@ -7,10 +7,10 @@ use image::Rgb;
 pub enum EpdColor {
   Black = 0,
   White = 1,
-  Green = 2,
-  Blue = 3,
-  Red = 4,
-  Yellow = 5,
+  Yellow = 2,
+  Red = 3,
+  Blue = 5,
+  Green = 6,
 }
 
 impl EpdColor {
