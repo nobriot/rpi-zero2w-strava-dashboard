@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 image = "0.25"
-imageproc = "0.25"
+imageproc = "0.26"
 ab_glyph = "0.2"
 chrono = "0.4"
 rppal = { version = "0.22", features = ["hal"] }
