@@ -46,6 +46,7 @@ impl Epd7in3e {
 
     let mut epd = Self { spi, dc, rst, busy, pwr };
 
+    log::info!("EPD pins: DC={DC_PIN}, RST={RST_PIN}, BUSY={BUSY_PIN}, PWR={PWR_PIN}, SPI=0/CE0 @ 10MHz");
     epd.power_on();
     epd.hardware_reset();
     epd.init_display()?;
@@ -71,11 +72,15 @@ impl Epd7in3e {
     thread::sleep(Duration::from_millis(2));
     self.rst.set_high();
     thread::sleep(Duration::from_millis(20));
-    log::debug!("EPD hardware reset complete");
+
+    // Sample BUSY pin after reset to check display responsiveness
+    let level = self.busy.read();
+    log::info!("Hardware reset complete — BUSY pin is {level:?} (expect Low if display is alive)");
   }
 
-  fn wait_busy(&self) -> Result<(), DisplayError> {
-    log::debug!("Waiting for EPD busy...");
+  fn wait_busy(&self, context: &str) -> Result<(), DisplayError> {
+    let level = self.busy.read();
+    log::info!("[BUSY] {context}: pin is {level:?} before wait");
     let start = std::time::Instant::now();
     // BUSY is LOW when the display is busy, HIGH when ready
     while self.busy.read() == Level::Low {
@@ -84,7 +89,12 @@ impl Epd7in3e {
       }
       thread::sleep(Duration::from_millis(20));
     }
-    log::debug!("EPD ready (waited {:?})", start.elapsed());
+    let elapsed = start.elapsed();
+    if elapsed < Duration::from_millis(10) {
+      log::warn!("[BUSY] {context}: ready in {elapsed:?} (suspiciously fast — display may not be responding)");
+    } else {
+      log::info!("[BUSY] {context}: ready in {elapsed:?}");
+    }
     Ok(())
   }
 
@@ -106,7 +116,7 @@ impl Epd7in3e {
   /// Initialize the epd7in3e ACeP display controller.
   /// Command sequence ported from Waveshare C reference driver (EPD_7in3e.c).
   fn init_display(&mut self) -> Result<(), DisplayError> {
-    self.wait_busy()?;
+    self.wait_busy("init: after reset")?;
     thread::sleep(Duration::from_millis(30));
 
     // CMDH
@@ -154,8 +164,9 @@ impl Epd7in3e {
     self.send_data(&[0x2F])?;
 
     // POWER_ON
+    log::info!("init: sending POWER_ON (0x04)");
     self.send_command(0x04)?;
-    self.wait_busy()?;
+    self.wait_busy("init: POWER_ON")?;
 
     log::info!("EPD initialized ({}x{})", WIDTH, HEIGHT);
     Ok(())
@@ -165,22 +176,26 @@ impl Epd7in3e {
   /// Sequence from Waveshare C reference driver (EPD_7IN3E_TurnOnDisplay).
   fn turn_on_display(&mut self) -> Result<(), DisplayError> {
     // POWER_ON
+    log::info!("turn_on_display: sending POWER_ON (0x04)");
     self.send_command(0x04)?;
-    self.wait_busy()?;
+    self.wait_busy("turn_on_display: POWER_ON")?;
 
     // Booster re-setting
+    log::info!("turn_on_display: sending booster setting (0x06)");
     self.send_command(0x06)?;
     self.send_data(&[0x6F, 0x1F, 0x17, 0x49])?;
 
     // DISPLAY_REFRESH
+    log::info!("turn_on_display: sending DISPLAY_REFRESH (0x12) — expecting ~30s wait");
     self.send_command(0x12)?;
     self.send_data(&[0x00])?;
-    self.wait_busy()?;
+    self.wait_busy("turn_on_display: DISPLAY_REFRESH")?;
 
     // POWER_OFF
+    log::info!("turn_on_display: sending POWER_OFF (0x02)");
     self.send_command(0x02)?;
     self.send_data(&[0x00])?;
-    self.wait_busy()?;
+    self.wait_busy("turn_on_display: POWER_OFF")?;
 
     Ok(())
   }
@@ -196,11 +211,13 @@ impl Epd7in3e {
                                               buf.len())));
     }
 
-    log::info!("Sending image data to EPD...");
+    log::info!("Sending image data ({} bytes) to EPD...", buf.len());
 
     // Write image data (command 0x10)
     self.send_command(0x10)?;
+    let spi_start = std::time::Instant::now();
     self.send_data(buf)?;
+    log::info!("SPI data transfer took {:?}", spi_start.elapsed());
 
     // Trigger display refresh
     self.turn_on_display()?;
@@ -220,9 +237,10 @@ impl Epd7in3e {
   /// Put the display into deep sleep mode for power saving.
   pub fn sleep(&mut self) -> Result<(), DisplayError> {
     // POWER_OFF
+    log::info!("sleep: sending POWER_OFF (0x02)");
     self.send_command(0x02)?;
     self.send_data(&[0x00])?;
-    self.wait_busy()?;
+    self.wait_busy("sleep: POWER_OFF")?;
 
     // DEEP_SLEEP
     self.send_command(0x07)?;
