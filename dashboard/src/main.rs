@@ -102,33 +102,10 @@ fn run() -> Result<()> {
         }
       },
       Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
+        // fetch_stats already falls back to cached data, so this is unlikely
+        // to be reached. Log and retry next cycle.
         log::warn!("Network unavailable: {msg}");
         eprintln!("Network unavailable — will retry next cycle");
-
-        // Read battery status (non-fatal)
-        let battery = display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()).ok();
-
-        let scale = display::renderer::Scale::new(args.scale);
-        let img = display::renderer::render_offline_dashboard(battery.as_ref(), scale);
-
-        if let Some(ref path) = args.save_png {
-          let _ = img.save(path);
-        }
-
-        match display::epd7in3e::Epd7in3e::new() {
-          Ok(mut epd) => {
-            let ss_scale = display::renderer::Scale::new(2);
-            let epd_img = display::renderer::render_offline_dashboard(battery.as_ref(), ss_scale);
-            let buf = display::palette::quantize_supersampled_to_epd_buffer(&epd_img, 800, 480);
-            let _ = epd.display_image(&buf);
-            let _ = epd.sleep();
-          },
-          Err(_) => {
-            if args.save_png.is_none() {
-              let _ = img.save("dashboard_offline.png");
-            }
-          },
-        }
       },
       Err(e) => {
         eprintln!("Error during cycle: {e:?}");

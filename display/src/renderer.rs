@@ -183,45 +183,6 @@ pub fn render_dashboard(stats: &DashboardStats,
   img
 }
 
-/// Render a minimal offline dashboard indicating no network connectivity.
-pub fn render_offline_dashboard(battery: Option<&BatteryStatus>, s: Scale) -> RgbImage {
-  let mut img = RgbImage::from_pixel(s.u(W), s.u(H), WHITE);
-  let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
-  let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
-
-  // Orange header bar
-  draw_filled_rect_mut(&mut img, Rect::at(0, 0).of_size(s.u(W), s.u(HEADER_H)), ORANGE);
-
-  draw_text_mut(&mut img,
-                WHITE,
-                s.i(MARGIN),
-                s.i(14),
-                s.px(26.0),
-                &font_bold,
-                "STRAVA DASHBOARD");
-
-  // Battery indicator at bottom-right (same as regular dashboard)
-  draw_battery_indicator(&mut img, &font_bold, battery, true, s);
-
-  // Centered offline message
-  let msg = "OFFLINE";
-  let msg_w = approx_text_width(msg, s.u(48));
-  let msg_x = (s.u(W) as i32 - msg_w) / 2;
-  draw_text_mut(&mut img, ORANGE, msg_x, s.i(180), s.px(48.0), &font_bold, msg);
-
-  let sub = "No internet connection";
-  let sub_w = approx_text_width(sub, s.u(20));
-  let sub_x = (s.u(W) as i32 - sub_w) / 2;
-  draw_text_mut(&mut img, DARK_GRAY, sub_x, s.i(240), s.px(20.0), &font, sub);
-
-  let hint = "Will retry automatically next cycle";
-  let hint_w = approx_text_width(hint, s.u(16));
-  let hint_x = (s.u(W) as i32 - hint_w) / 2;
-  draw_text_mut(&mut img, LIGHT_GRAY, hint_x, s.i(270), s.px(16.0), &font, hint);
-
-  img
-}
-
 /// Draw battery percentage and optional "OFFLINE" label at the bottom-right
 /// corner.
 fn draw_battery_indicator(img: &mut RgbImage,
