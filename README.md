@@ -9,9 +9,19 @@ with e-paper display.
 
 ---
 
+## Quick demo
+
+TODO:Insert a picture
+
+## TODOs
+
+Witty Pi 4 Mini ?
+https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
+
 ## What It Does
 
 Displays your Strava stats on a 7.3" 6-color e-paper display:
+
 - **Multi-sport tracking** — Run, Ride, Swim with yearly goal progress bars
 - **Activity details** — Longest, fastest, race bests (5K/10K/HM)
 - **Last activity with route polyline**

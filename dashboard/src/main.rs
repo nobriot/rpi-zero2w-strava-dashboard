@@ -9,8 +9,6 @@ use crate::errors::DashError;
 use args::Args;
 use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
 use std::path::PathBuf;
-use std::thread;
-use std::time::Duration;
 
 const STYLES: styling::Styles =
   styling::Styles::styled().header(styling::AnsiColor::Green.on_default().bold())
@@ -81,7 +79,6 @@ fn run() -> Result<()> {
       log::info!("Quiet hours ({:02}:00–{:02}:00) — sleeping for {secs}s until wake",
                  config.display.quiet_start_hour,
                  config.display.quiet_end_hour,);
-      thread::sleep(Duration::from_secs(secs));
       // After waking, fall through to run a cycle immediately
     }
 
@@ -117,7 +114,6 @@ fn run() -> Result<()> {
     }
 
     log::info!("Sleeping for {} seconds...", sleep_secs);
-    thread::sleep(Duration::from_secs(sleep_secs));
   }
 
   Ok(())

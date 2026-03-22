@@ -17,7 +17,6 @@ const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = Rgb([0, 150, 0]);
 const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
 const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
-const DARK_GRAY: Rgb<u8> = Rgb([90, 90, 90]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
 const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
@@ -29,6 +28,8 @@ const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png
 const MARGIN: i32 = 24;
 const HEADER_H: u32 = 56;
 const ICON_SZ: u32 = icons::SIZE;
+const DIVIDER_THICKNESS: u32 = 3;
+const BAR_BORDER_THICKNESS: u32 = 2;
 
 /// Resolution scale factor for rendering.
 #[derive(Clone, Copy)]
@@ -129,10 +130,10 @@ impl Layout {
     let lf_extra = if n_lf > 0 { (slack / 6).min(8) } else { 0 };
 
     Layout { bar_section_h:  s.i(34 + bar_extra),
-             bar_h:          s.u(14),
+             bar_h:          s.u(16),
              lf_entry_h:     s.i(34 + lf_extra),
-             lf_detail_font: s.f(if slack > 60 { 17.0 } else { 16.0 }),
-             lf_name_font:   s.f(if slack > 60 { 15.0 } else { 14.0 }), }
+             lf_detail_font: s.f(if slack > 60 { 19.0 } else { 18.0 }),
+             lf_name_font:   s.f(if slack > 60 { 17.0 } else { 16.0 }), }
   }
 }
 
@@ -193,7 +194,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
   let bat_pct = battery.map(|b| b.percentage).unwrap_or(100);
   let bat_fill = bat_pct as f32 / 100.0;
   let bat_text = format!("{}%", bat_pct);
-  let text_scale = s.px(14.0);
+  let text_scale = s.px(16.0);
   let text_w = measure_text_width(font_bold, text_scale, &bat_text) as i32;
 
   // Stack vertically at bottom-right, left-aligned
@@ -204,9 +205,9 @@ fn draw_battery_indicator(img: &mut RgbImage,
 
   if is_offline {
     let label = "OFFLINE";
-    let label_scale = s.px(12.0);
+    let label_scale = s.px(14.0);
     let y_offline = s.u(H) as i32 - s.i(34);
-    draw_text_mut(img, DARK_GRAY, x, y_offline, label_scale, font_bold, label);
+    draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
   }
 
   let y = s.u(H) as i32 - s.i(18);
@@ -343,10 +344,10 @@ fn draw_sport_bars(img: &mut RgbImage,
                       layout,
                       s.i(MARGIN),
                       full_w,
+                      s.f(18.0),
                       s.f(16.0),
-                      s.f(14.0),
-                      s.f(14.0),
-                      s.f(20.0),
+                      s.f(16.0),
+                      s.f(22.0),
                       y,
                       s);
         y += layout.bar_section_h;
@@ -363,10 +364,10 @@ fn draw_sport_bars(img: &mut RgbImage,
                     layout,
                     s.i(MARGIN),
                     full_w,
+                    s.f(18.0),
                     s.f(16.0),
-                    s.f(14.0),
-                    s.f(14.0),
-                    s.f(20.0),
+                    s.f(16.0),
+                    s.f(22.0),
                     y,
                     s);
       y += layout.bar_section_h;
@@ -384,10 +385,10 @@ fn draw_sport_bars(img: &mut RgbImage,
                     layout,
                     s.i(MARGIN),
                     half_w,
+                    s.f(16.0),
                     s.f(14.0),
-                    s.f(13.0),
-                    s.f(13.0),
-                    s.f(18.0),
+                    s.f(14.0),
+                    s.f(20.0),
                     y,
                     s);
       draw_goal_bar(img,
@@ -399,10 +400,10 @@ fn draw_sport_bars(img: &mut RgbImage,
                     layout,
                     right_x,
                     half_w,
+                    s.f(16.0),
                     s.f(14.0),
-                    s.f(13.0),
-                    s.f(13.0),
-                    s.f(18.0),
+                    s.f(14.0),
+                    s.f(20.0),
                     y,
                     s);
       y += layout.bar_section_h;
@@ -414,7 +415,7 @@ fn draw_sport_bars(img: &mut RgbImage,
 
 /// Draw a single goal bar (full-width or half-width) at the given position.
 fn draw_goal_bar(img: &mut RgbImage,
-                 font: &FontRef,
+                 _font: &FontRef,
                  font_bold: &FontRef,
                  font_symbol: &FontRef,
                  stats: &DashboardStats,
@@ -455,10 +456,10 @@ fn draw_goal_bar(img: &mut RgbImage,
 
   // Right: flag + goal (green when reached)
   let goal_reached = ytd_km >= goal;
-  let flag_color = if goal_reached { GREEN } else { DARK_GRAY };
+  let flag_color = if goal_reached { GREEN } else { BLACK };
   let goal_text = format!("{:.0}km", goal);
   let goal_scale = PxScale::from(goal_font_sz);
-  let goal_w = measure_text_width(font, goal_scale, &goal_text) as i32;
+  let goal_w = measure_text_width(font_bold, goal_scale, &goal_text) as i32;
   let flag_scale = PxScale::from(flag_font_sz);
   let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
   let flag_x = x + bar_w as i32 - goal_w - flag_w - s.i(4);
@@ -468,7 +469,7 @@ fn draw_goal_bar(img: &mut RgbImage,
                 x + bar_w as i32 - goal_w,
                 y + s.i(3),
                 goal_scale,
-                font,
+                font_bold,
                 &goal_text);
 
   // Center: time + count (condensed for narrow bars)
@@ -485,19 +486,19 @@ fn draw_goal_bar(img: &mut RgbImage,
                  + measure_text_width(font_bold, left_scale, &left_text) as i32
                  + s.i(8);
   let right_start = flag_x - s.i(6);
-  let center_w = measure_text_width(font, center_scale, &center_text) as i32;
+  let center_w = measure_text_width(font_bold, center_scale, &center_text) as i32;
   let available = right_start - left_end;
 
   if available >= center_w {
     let center_x = left_end + (available - center_w) / 2;
-    draw_text_mut(img, DARK_GRAY, center_x, y + s.i(3), center_scale, font, &center_text);
+    draw_text_mut(img, BLACK, center_x, y + s.i(3), center_scale, font_bold, &center_text);
   } else {
     // Fall back to count only for very narrow bars
     let short_text = format!("{} {}", ytd_count, noun);
-    let short_w = measure_text_width(font, center_scale, &short_text) as i32;
+    let short_w = measure_text_width(font_bold, center_scale, &short_text) as i32;
     if available >= short_w {
       let cx = left_end + (available - short_w) / 2;
-      draw_text_mut(img, DARK_GRAY, cx, y + s.i(3), center_scale, font, &short_text);
+      draw_text_mut(img, BLACK, cx, y + s.i(3), center_scale, font_bold, &short_text);
     }
   }
 
@@ -510,25 +511,27 @@ fn draw_goal_bar(img: &mut RgbImage,
     draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(fill_w, layout.bar_h), GREEN);
   }
 
-  // Thin black border
-  let bx = x as f32;
-  let by = bar_y as f32;
-  let bx2 = (x as u32 + bar_w) as f32;
-  let by2 = (bar_y as u32 + layout.bar_h) as f32;
-  draw_line_segment_mut(img, (bx, by), (bx2, by), BLACK);
-  draw_line_segment_mut(img, (bx, by2), (bx2, by2), BLACK);
-  draw_line_segment_mut(img, (bx, by), (bx, by2), BLACK);
-  draw_line_segment_mut(img, (bx2, by), (bx2, by2), BLACK);
+  // Black border
+  let bt = s.u(BAR_BORDER_THICKNESS);
+  draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(bar_w, bt), BLACK);
+  draw_filled_rect_mut(img,
+                       Rect::at(x, bar_y + layout.bar_h as i32 - bt as i32).of_size(bar_w, bt),
+                       BLACK);
+  draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(bt, layout.bar_h), BLACK);
+  draw_filled_rect_mut(img,
+                       Rect::at(x + bar_w as i32 - bt as i32, bar_y).of_size(bt, layout.bar_h),
+                       BLACK);
 
   // Orange dashed year-progress marker
   let yp = year_progress();
   let marker_x = x as f32 + (bar_w as f64 * yp) as f32;
   let bar_top = bar_y as f32;
   let bar_bot = (bar_y as u32 + layout.bar_h) as f32;
+  let marker_w = s.u(2);
   let mut dy = bar_top;
   while dy < bar_bot {
     let seg_end = (dy + s.f(3.0)).min(bar_bot);
-    for offset in 0..s.factor() {
+    for offset in 0..marker_w {
       draw_line_segment_mut(img,
                             (marker_x + offset as f32, dy),
                             (marker_x + offset as f32, seg_end),
@@ -541,7 +544,7 @@ fn draw_goal_bar(img: &mut RgbImage,
 // --- Totals (single line) ---
 
 fn draw_totals_row(img: &mut RgbImage,
-                   font: &FontRef,
+                   _font: &FontRef,
                    font_bold: &FontRef,
                    stats: &DashboardStats,
                    y_start: i32,
@@ -552,7 +555,9 @@ fn draw_totals_row(img: &mut RgbImage,
 
   // Extra space before separator
   let sep_y = y_start + s.i(4);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
+  draw_filled_rect_mut(img,
+                       Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
+                       BLACK);
 
   // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
   let y = sep_y + s.i(8);
@@ -566,9 +571,9 @@ fn draw_totals_row(img: &mut RgbImage,
                             stats.total_time_display(),
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
-  let text_w = measure_text_width(font, s.px(16.0), &center_text) as i32;
+  let text_w = measure_text_width(font_bold, s.px(18.0), &center_text) as i32;
   let center_x = (s.u(W) as i32 - text_w) / 2;
-  draw_text_mut(img, BLACK, center_x, y, s.px(16.0), font, &center_text);
+  draw_text_mut(img, BLACK, center_x, y, s.px(18.0), font_bold, &center_text);
 
   // Extra space after
   y + s.i(28)
@@ -589,7 +594,9 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let half_w = content_w / 2;
 
   let sep_y = y_start + s.i(2);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
+  draw_filled_rect_mut(img,
+                       Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
+                       BLACK);
 
   let y = sep_y + s.i(6);
   let detail_sz = PxScale::from(layout.lf_detail_font);
@@ -627,7 +634,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                     &line1);
       let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
       draw_text_with_fallback(img,
-                              DARK_GRAY,
+                              BLACK,
                               s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
                               left_y + s.i(20),
                               name_sz,
@@ -672,7 +679,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
       let date = rb.date.as_deref().unwrap_or("—");
       let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
       draw_text_with_fallback(img,
-                              DARK_GRAY,
+                              BLACK,
                               right_x + s.u(ICON_SZ) as i32 + s.i(12),
                               right_y + s.i(20),
                               name_sz,
@@ -693,8 +700,9 @@ fn draw_longest_fastest(img: &mut RgbImage,
   }
 
   // Vertical divider
-  let div_x = (s.i(MARGIN) + half_w as i32) as f32;
-  draw_line_segment_mut(img, (div_x, y as f32), (div_x, left_y.max(right_y) as f32), BLACK);
+  let div_x = s.i(MARGIN) + half_w as i32;
+  let div_h = (left_y.max(right_y) - y) as u32;
+  draw_filled_rect_mut(img, Rect::at(div_x, y).of_size(s.u(DIVIDER_THICKNESS), div_h), BLACK);
 
   left_y.max(right_y) + s.i(4)
 }
@@ -702,7 +710,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
 // --- Last Activity ---
 
 fn draw_last_activity(img: &mut RgbImage,
-                      font: &FontRef,
+                      _font: &FontRef,
                       font_bold: &FontRef,
                       font_emoji: &FontRef,
                       stats: &DashboardStats,
@@ -713,7 +721,9 @@ fn draw_last_activity(img: &mut RgbImage,
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
   let sep_y = y_start + s.i(2);
-  draw_filled_rect_mut(img, Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(1)), BLACK);
+  draw_filled_rect_mut(img,
+                       Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
+                       BLACK);
 
   let y = sep_y + s.i(6);
 
@@ -734,18 +744,18 @@ fn draw_last_activity(img: &mut RgbImage,
                             BLACK,
                             line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                             y + s.i(24),
-                            s.px(16.0),
-                            font,
+                            s.px(18.0),
+                            font_bold,
                             font_emoji,
                             &line1);
 
     let line2 = format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
                         last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos);
     draw_text_mut(img,
-                  DARK_GRAY,
+                  BLACK,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                   y + s.i(44),
-                  s.px(16.0),
+                  s.px(18.0),
                   font_bold,
                   &line2);
 

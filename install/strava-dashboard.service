@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/rpi-zero2w-strava-dash
+ExecStart=/usr/local/bin/strava-dashboard
 Restart=always
 RestartSec=30
 Environment=RUST_LOG=info
