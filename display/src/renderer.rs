@@ -74,7 +74,7 @@ impl Default for DisplayConfig {
                                     GoalConfig { sport: SportType::Run,
                                                  km:    500.0, },
                                     GoalConfig { sport: SportType::Swim,
-                                                 km:    30.0, },],
+                                                 km:    20.0, },],
            polyline_thickness: 2, }
   }
 }
@@ -228,10 +228,10 @@ fn draw_header(img: &mut RgbImage,
 
   let year = Utc::now().year();
   let title = format!("{} - {}", stats.athlete_first_name, year);
-  let title_scale = s.px(30.0);
+  let title_scale = s.px(45.0);
   let title_w = measure_text_width(font_bold, title_scale, &title);
   let title_x = ((s.u(W) as f32 - title_w) / 2.0) as i32;
-  draw_text_mut(img, WHITE, title_x, s.i(13), title_scale, font_bold, &title);
+  draw_text_mut(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title);
 
   draw_powered_by_logo(img, s);
 }
