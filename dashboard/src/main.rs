@@ -105,14 +105,18 @@ fn run() -> Result<()> {
     }
 
     // Check if we're inside the quiet window
-    if is_quiet_time(&config.display) {
+    let sleep_duration = if is_quiet_time(&config.display) {
       let secs = seconds_until_quiet_end(&config.display);
       log::info!("Quiet hours ({:02}:00–{:02}:00) — sleeping for {secs}s until wake",
                  config.display.quiet_start_hour,
                  config.display.quiet_end_hour,);
+      secs
     } else {
       log::info!("Sleeping for {} seconds...", sleep_secs);
-    }
+      sleep_secs
+    };
+
+    std::thread::sleep(std::time::Duration::from_secs(sleep_duration));
   }
 
   Ok(())
