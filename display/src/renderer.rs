@@ -28,8 +28,8 @@ const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png
 const MARGIN: i32 = 24;
 const HEADER_H: u32 = 56;
 const ICON_SZ: u32 = icons::SIZE;
-const DIVIDER_THICKNESS: u32 = 3;
-const BAR_BORDER_THICKNESS: u32 = 2;
+const DIVIDER_THICKNESS: u32 = 1;
+const BAR_BORDER_THICKNESS: u32 = 1;
 
 /// Resolution scale factor for rendering.
 #[derive(Clone, Copy)]
@@ -604,13 +604,13 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let entry_h = layout.lf_entry_h;
 
   // Left: LONGEST (ruler icon)
-  let section_icon_scale = s.px(20.0);
+  let section_icon_scale = s.px(22.0);
   icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, ORANGE, s.factor());
   draw_text_mut(img,
                 ORANGE,
                 s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
                 y,
-                s.px(20.0),
+                s.px(22.0),
                 font_bold,
                 "LONGEST");
 
@@ -638,7 +638,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
                               left_y + s.i(20),
                               name_sz,
-                              font_bold,
+                              font,
                               font_emoji,
                               &line2);
     } else if stats.show_all_sports {
@@ -683,7 +683,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               right_x + s.u(ICON_SZ) as i32 + s.i(12),
                               right_y + s.i(20),
                               name_sz,
-                              font_bold,
+                              font,
                               font_emoji,
                               &line2);
     } else {
@@ -710,7 +710,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
 // --- Last Activity ---
 
 fn draw_last_activity(img: &mut RgbImage,
-                      _font: &FontRef,
+                      font: &FontRef,
                       font_bold: &FontRef,
                       font_emoji: &FontRef,
                       stats: &DashboardStats,
@@ -756,7 +756,7 @@ fn draw_last_activity(img: &mut RgbImage,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                   y + s.i(44),
                   s.px(18.0),
-                  font_bold,
+                  font,
                   &line2);
 
     // Polyline: starts right of the "LAST ACTIVITY" title, overlapping the
