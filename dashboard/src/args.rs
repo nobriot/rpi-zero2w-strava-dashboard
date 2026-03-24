@@ -2,8 +2,8 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = env!("CARGO_PKG_NAME"), max_term_width = 80)]
-#[command(about = "rpi-zero2w-strava-dash")]
+#[command(name = env!("CARGO_BIN_NAME"), max_term_width = 80)]
+#[command(about = env!("CARGO_PKG_DESCRIPTION"))]
 #[command(version)]
 pub struct Args {
   /// Force a Strava auth flow, to get a token that has read scope
@@ -11,8 +11,7 @@ pub struct Args {
   #[arg(short, long)]
   pub auth: bool,
 
-  /// Path to a config file (default:
-  /// ~/.config/rpi-zero2w-strava-dash/config.toml)
+  /// Path to a config file (default: ~/.config/<app>/config.toml)
   #[arg(short, long, value_name = "FILE")]
   pub config: Option<PathBuf>,
 
