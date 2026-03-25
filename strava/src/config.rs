@@ -83,7 +83,7 @@ fn default_quiet_end() -> u32 {
   8
 }
 fn default_polyline_thickness() -> u32 {
-  2
+  3
 }
 fn default_goals() -> Vec<GoalConfig> {
   vec![GoalConfig { sport: SportType::Run,

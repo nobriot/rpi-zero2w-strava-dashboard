@@ -160,7 +160,7 @@ impl Client {
     log::debug!("JSON:\n{body}");
 
     let stats: Result<AthleteStats, serde_json::Error> = serde_json::from_str(&body);
-    dbg!(&stats);
+    // dbg!(&stats);
     let stats = stats.map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
 
     self.cache.save("stats", &stats, None);

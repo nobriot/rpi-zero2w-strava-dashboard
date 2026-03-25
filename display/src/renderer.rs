@@ -118,10 +118,10 @@ impl Layout {
     let n_lf = count_longest_fastest_entries(stats) as i32;
 
     let base_bars = n_bar_rows * 34;
-    let base_totals = 34;
-    let base_lf = 26 + n_lf * 34;
-    let base_last = 60;
-    let base_gaps = 24;
+    let base_totals = 38;
+    let base_lf = 30 + n_lf * 34;
+    let base_last = 64;
+    let base_gaps = 32;
     let needed = HEADER_H as i32 + base_bars + base_totals + base_lf + base_last + base_gaps;
     let budget = H as i32;
     let slack = (budget - needed).max(0);
@@ -210,7 +210,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
     draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
   }
 
-  let y = s.u(H) as i32 - s.i(18);
+  let y = s.u(H) as i32 - s.i(9);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
   icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, BLACK, GREEN, bat_fill, s.factor());
 }
@@ -415,7 +415,7 @@ fn draw_sport_bars(img: &mut RgbImage,
 
 /// Draw a single goal bar (full-width or half-width) at the given position.
 fn draw_goal_bar(img: &mut RgbImage,
-                 _font: &FontRef,
+                 font: &FontRef,
                  font_bold: &FontRef,
                  font_symbol: &FontRef,
                  stats: &DashboardStats,
@@ -459,7 +459,7 @@ fn draw_goal_bar(img: &mut RgbImage,
   let flag_color = if goal_reached { GREEN } else { BLACK };
   let goal_text = format!("{:.0}km", goal);
   let goal_scale = PxScale::from(goal_font_sz);
-  let goal_w = measure_text_width(font_bold, goal_scale, &goal_text) as i32;
+  let goal_w = measure_text_width(font, goal_scale, &goal_text) as i32;
   let flag_scale = PxScale::from(flag_font_sz);
   let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
   let flag_x = x + bar_w as i32 - goal_w - flag_w - s.i(4);
@@ -469,7 +469,7 @@ fn draw_goal_bar(img: &mut RgbImage,
                 x + bar_w as i32 - goal_w,
                 y + s.i(3),
                 goal_scale,
-                font_bold,
+                font,
                 &goal_text);
 
   // Center: time + count (condensed for narrow bars)
@@ -486,19 +486,19 @@ fn draw_goal_bar(img: &mut RgbImage,
                  + measure_text_width(font_bold, left_scale, &left_text) as i32
                  + s.i(8);
   let right_start = flag_x - s.i(6);
-  let center_w = measure_text_width(font_bold, center_scale, &center_text) as i32;
+  let center_w = measure_text_width(font, center_scale, &center_text) as i32;
   let available = right_start - left_end;
 
   if available >= center_w {
     let center_x = left_end + (available - center_w) / 2;
-    draw_text_mut(img, BLACK, center_x, y + s.i(3), center_scale, font_bold, &center_text);
+    draw_text_mut(img, BLACK, center_x, y + s.i(3), center_scale, font, &center_text);
   } else {
     // Fall back to count only for very narrow bars
     let short_text = format!("{} {}", ytd_count, noun);
-    let short_w = measure_text_width(font_bold, center_scale, &short_text) as i32;
+    let short_w = measure_text_width(font, center_scale, &short_text) as i32;
     if available >= short_w {
       let cx = left_end + (available - short_w) / 2;
-      draw_text_mut(img, BLACK, cx, y + s.i(3), center_scale, font_bold, &short_text);
+      draw_text_mut(img, BLACK, cx, y + s.i(3), center_scale, font, &short_text);
     }
   }
 
@@ -544,7 +544,7 @@ fn draw_goal_bar(img: &mut RgbImage,
 // --- Totals (single line) ---
 
 fn draw_totals_row(img: &mut RgbImage,
-                   _font: &FontRef,
+                   font: &FontRef,
                    font_bold: &FontRef,
                    stats: &DashboardStats,
                    y_start: i32,
@@ -554,16 +554,16 @@ fn draw_totals_row(img: &mut RgbImage,
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
   // Extra space before separator
-  let sep_y = y_start + s.i(4);
+  let sep_y = y_start + s.i(8);
   draw_filled_rect_mut(img,
                        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
                        BLACK);
 
   // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
-  let y = sep_y + s.i(8);
+  let y = sep_y + s.i(10);
   icons::draw_bar_chart(img, s.u(MARGIN as u32), (y - s.i(6)) as u32, ORANGE, s.factor());
   let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
-  draw_text_mut(img, ORANGE, s.i(MARGIN) + icon_w, y, s.px(20.0), font_bold, TOTALS);
+  draw_text_mut(img, ORANGE, s.i(MARGIN) + icon_w, y, s.px(24.0), font_bold, TOTALS);
 
   let center_text = format!("{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
                             stats.activity_count,
@@ -571,12 +571,12 @@ fn draw_totals_row(img: &mut RgbImage,
                             stats.total_time_display(),
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
-  let text_w = measure_text_width(font_bold, s.px(18.0), &center_text) as i32;
+  let text_w = measure_text_width(font, s.px(18.0), &center_text) as i32;
   let center_x = (s.u(W) as i32 - text_w) / 2;
-  draw_text_mut(img, BLACK, center_x, y, s.px(18.0), font_bold, &center_text);
+  draw_text_mut(img, BLACK, center_x, y, s.px(18.0), font, &center_text);
 
   // Extra space after
-  y + s.i(28)
+  y + s.i(32)
 }
 
 // --- Longest / Fastest split ---
@@ -593,24 +593,24 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
   let half_w = content_w / 2;
 
-  let sep_y = y_start + s.i(2);
+  let sep_y = y_start + s.i(6);
   draw_filled_rect_mut(img,
                        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
                        BLACK);
 
-  let y = sep_y + s.i(6);
+  let y = sep_y + s.i(8);
   let detail_sz = PxScale::from(layout.lf_detail_font);
   let name_sz = PxScale::from(layout.lf_name_font);
   let entry_h = layout.lf_entry_h;
 
   // Left: LONGEST (ruler icon)
-  let section_icon_scale = s.px(22.0);
+  let section_icon_scale = s.px(27.0);
   icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, ORANGE, s.factor());
   draw_text_mut(img,
                 ORANGE,
                 s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
                 y,
-                s.px(22.0),
+                section_icon_scale,
                 font_bold,
                 "LONGEST");
 
@@ -658,7 +658,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
   draw_text_mut(img, ORANGE, right_x, y, section_icon_scale, font_symbol, "\u{F0E7} ");
   let bolt_icon_w =
     measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + s.i(4);
-  draw_text_mut(img, ORANGE, right_x + bolt_icon_w, y, s.px(20.0), font_bold, "FASTEST");
+  draw_text_mut(img, ORANGE, right_x + bolt_icon_w, y, section_icon_scale, font_bold, "FASTEST");
 
   let mut right_y = y + s.i(26);
 
@@ -704,7 +704,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let div_h = (left_y.max(right_y) - y) as u32;
   draw_filled_rect_mut(img, Rect::at(div_x, y).of_size(s.u(DIVIDER_THICKNESS), div_h), BLACK);
 
-  left_y.max(right_y) + s.i(4)
+  left_y.max(right_y) + s.i(8)
 }
 
 // --- Last Activity ---
@@ -720,16 +720,16 @@ fn draw_last_activity(img: &mut RgbImage,
                       s: Scale) {
   let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
 
-  let sep_y = y_start + s.i(2);
+  let sep_y = y_start + s.i(6);
   draw_filled_rect_mut(img,
                        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
                        BLACK);
 
-  let y = sep_y + s.i(6);
+  let y = sep_y + s.i(8);
 
   if let Some(ref last) = stats.last_activity {
     // "LAST ACTIVITY" title
-    draw_text_mut(img, ORANGE, s.i(MARGIN), y, s.px(20.0), font_bold, "LAST ACTIVITY");
+    draw_text_mut(img, ORANGE, s.i(MARGIN), y, s.px(24.0), font_bold, "LAST ACTIVITY");
 
     // First line: sport icon + name · date
     let line1_x = s.i(MARGIN);
@@ -759,10 +759,12 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Polyline: starts right of the "LAST ACTIVITY" title, overlapping the
-    // detail text lines vertically — this gives it maximum horizontal space.
-    let title_w = approx_text_width("LAST ACTIVITY", s.u(18));
-    let polyline_x = s.i(MARGIN) + title_w + s.i(12);
+    // Polyline: starts right of the detail text lines so they don't overlap.
+    // Measure the wider of the two text lines to find the safe start.
+    let line1_w = measure_text_width(font_bold, s.px(18.0), &line1) as i32;
+    let line2_w = measure_text_width(font, s.px(18.0), &line2) as i32;
+    let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
+    let polyline_x = text_right + s.i(16);
     draw_polyline(img, stats, y, polyline_x, is_offline, config, s);
   }
 }
@@ -943,10 +945,6 @@ fn draw_text_with_fallback(img: &mut RgbImage,
       // else: skip the character entirely (no more squares)
     }
   }
-}
-
-fn approx_text_width(text: &str, font_size: u32) -> i32 {
-  (text.len() as f32 * font_size as f32 * 0.55) as i32
 }
 
 fn truncate_str(s: &str, max_chars: usize) -> String {
