@@ -16,6 +16,7 @@ const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = Rgb([0, 150, 0]);
 const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
+const RED: Rgb<u8> = Rgb([200, 0, 0]);
 const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
@@ -65,6 +66,7 @@ impl Scale {
 pub struct DisplayConfig {
   pub goals:              Vec<GoalConfig>,
   pub polyline_thickness: u32,
+  pub show_totals:        bool,
 }
 
 impl Default for DisplayConfig {
@@ -75,7 +77,8 @@ impl Default for DisplayConfig {
                                                  km:    500.0, },
                                     GoalConfig { sport: SportType::Swim,
                                                  km:    20.0, },],
-           polyline_thickness: 2, }
+           polyline_thickness: 3,
+           show_totals:        true, }
   }
 }
 
@@ -112,14 +115,14 @@ struct Layout {
 }
 
 impl Layout {
-  fn compute(stats: &DashboardStats, n_goals: usize, s: Scale) -> Self {
+  fn compute(stats: &DashboardStats, n_goals: usize, show_totals: bool, s: Scale) -> Self {
     // With 3 goals, the 2nd and 3rd share a row → 2 visual rows max
     let n_bar_rows = n_goals.min(2) as i32;
     let n_lf = count_longest_fastest_entries(stats) as i32;
 
     let base_bars = n_bar_rows * 34;
-    let base_totals = 38;
-    let base_lf = 30 + n_lf * 34;
+    let base_totals = if show_totals { 38 } else { 0 };
+    let base_lf = 30 + n_lf * 36;
     let base_last = 64;
     let base_gaps = 32;
     let needed = HEADER_H as i32 + base_bars + base_totals + base_lf + base_last + base_gaps;
@@ -162,12 +165,16 @@ pub fn render_dashboard(stats: &DashboardStats,
   let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
   let font_symbol = FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
   let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
-  let layout = Layout::compute(stats, config.goals.len(), s);
+  let layout = Layout::compute(stats, config.goals.len(), config.show_totals, s);
 
   draw_header(&mut img, &font_bold, stats, avatar, s);
 
   let y = draw_sport_bars(&mut img, &font, &font_bold, &font_symbol, stats, config, &layout, s);
-  let y = draw_totals_row(&mut img, &font, &font_bold, stats, y, s);
+  let y = if config.show_totals {
+    draw_totals_row(&mut img, &font, &font_bold, stats, y, s)
+  } else {
+    y
+  };
   let y = draw_longest_fastest(&mut img,
                                &font,
                                &font_bold,
@@ -206,11 +213,11 @@ fn draw_battery_indicator(img: &mut RgbImage,
   if is_offline {
     let label = "OFFLINE";
     let label_scale = s.px(14.0);
-    let y_offline = s.u(H) as i32 - s.i(34);
+    let y_offline = s.u(H) as i32 - s.i(40);
     draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
   }
 
-  let y = s.u(H) as i32 - s.i(9);
+  let y = s.u(H) as i32 - s.i(16);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
   icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, BLACK, GREEN, bat_fill, s.factor());
 }
@@ -503,7 +510,7 @@ fn draw_goal_bar(img: &mut RgbImage,
   }
 
   // Progress bar with black border
-  let bar_y = y + s.i(22);
+  let bar_y = y + s.i(24);
   draw_filled_rect_mut(img, Rect::at(x, bar_y).of_size(bar_w, layout.bar_h), BAR_BG);
 
   let fill_w = ((bar_w as f64) * pct) as u32;
@@ -522,23 +529,11 @@ fn draw_goal_bar(img: &mut RgbImage,
                        Rect::at(x + bar_w as i32 - bt as i32, bar_y).of_size(bt, layout.bar_h),
                        BLACK);
 
-  // Orange dashed year-progress marker
+  // Red solid year-progress marker
   let yp = year_progress();
-  let marker_x = x as f32 + (bar_w as f64 * yp) as f32;
-  let bar_top = bar_y as f32;
-  let bar_bot = (bar_y as u32 + layout.bar_h) as f32;
-  let marker_w = s.u(2);
-  let mut dy = bar_top;
-  while dy < bar_bot {
-    let seg_end = (dy + s.f(3.0)).min(bar_bot);
-    for offset in 0..marker_w {
-      draw_line_segment_mut(img,
-                            (marker_x + offset as f32, dy),
-                            (marker_x + offset as f32, seg_end),
-                            ORANGE);
-    }
-    dy += s.f(5.0);
-  }
+  let marker_x = x + (bar_w as f64 * yp) as i32;
+  let marker_w = s.u(3);
+  draw_filled_rect_mut(img, Rect::at(marker_x, bar_y).of_size(marker_w, layout.bar_h), RED);
 }
 
 // --- Totals (single line) ---
@@ -603,9 +598,9 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let name_sz = PxScale::from(layout.lf_name_font);
   let entry_h = layout.lf_entry_h;
 
-  // Left: LONGEST (ruler icon)
+  // Left: LONGEST (ruler icon in black for contrast on e-paper)
   let section_icon_scale = s.px(27.0);
-  icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, ORANGE, s.factor());
+  icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, BLACK, s.factor());
   draw_text_mut(img,
                 ORANGE,
                 s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
@@ -636,7 +631,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
       draw_text_with_fallback(img,
                               BLACK,
                               s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
-                              left_y + s.i(20),
+                              left_y + s.i(22),
                               name_sz,
                               font,
                               font_emoji,
@@ -655,7 +650,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
   // Right: FASTEST (bolt icon, run race bests — always 3 buckets)
   let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
-  draw_text_mut(img, ORANGE, right_x, y, section_icon_scale, font_symbol, "\u{F0E7} ");
+  draw_text_mut(img, BLACK, right_x, y, section_icon_scale, font_symbol, "\u{F0E7} ");
   let bolt_icon_w =
     measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + s.i(4);
   draw_text_mut(img, ORANGE, right_x + bolt_icon_w, y, section_icon_scale, font_bold, "FASTEST");
@@ -681,7 +676,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
       draw_text_with_fallback(img,
                               BLACK,
                               right_x + s.u(ICON_SZ) as i32 + s.i(12),
-                              right_y + s.i(20),
+                              right_y + s.i(22),
                               name_sz,
                               font,
                               font_emoji,
@@ -754,7 +749,7 @@ fn draw_last_activity(img: &mut RgbImage,
     draw_text_mut(img,
                   BLACK,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
-                  y + s.i(44),
+                  y + s.i(48),
                   s.px(18.0),
                   font,
                   &line2);

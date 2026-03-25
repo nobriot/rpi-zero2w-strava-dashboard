@@ -12,3 +12,4 @@ rppal = { version = "0.22", features = ["hal"] }
 log = "0.4.29"
 thiserror = "2.0.18"
 strava = { path = "../strava" }
+resvg = { version = "0.47", default-features = false }

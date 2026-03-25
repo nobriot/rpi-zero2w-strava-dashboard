@@ -68,9 +68,13 @@ pub struct DisplayConfig {
   pub goals: Vec<GoalConfig>,
 
   /// Thickness of the polyline drawn for the last activity, in pixels
-  /// (default: 2).
+  /// (default: 3).
   #[serde(default = "default_polyline_thickness")]
   pub polyline_thickness: u32,
+
+  /// Whether to show the TOTALS summary row (default: true).
+  #[serde(default = "default_show_totals")]
+  pub show_totals: bool,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -84,6 +88,9 @@ fn default_quiet_end() -> u32 {
 }
 fn default_polyline_thickness() -> u32 {
   3
+}
+fn default_show_totals() -> bool {
+  true
 }
 fn default_goals() -> Vec<GoalConfig> {
   vec![GoalConfig { sport: SportType::Run,
@@ -100,7 +107,8 @@ impl Default for DisplayConfig {
            quiet_start_hour:    default_quiet_start(),
            quiet_end_hour:      default_quiet_end(),
            goals:               default_goals(),
-           polyline_thickness:  default_polyline_thickness(), }
+           polyline_thickness:  default_polyline_thickness(),
+           show_totals:         default_show_totals(), }
   }
 }
 

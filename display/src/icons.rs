@@ -1,20 +1,66 @@
-use image::{Rgb, RgbImage};
+use image::{Rgb, RgbImage, RgbaImage};
 
-/// Icon size in pixels (each icon fits in a SIZE×SIZE box).
-pub const SIZE: u32 = 24;
+/// Icon size in logical pixels (each icon fits in a SIZE×SIZE box).
+pub const SIZE: u32 = 20;
 
-const ICON_RUN: &[u8] = include_bytes!("../assets/icon_run.png");
-const ICON_RIDE: &[u8] = include_bytes!("../assets/icon_ride.png");
-const ICON_SWIM: &[u8] = include_bytes!("../assets/icon_swim.png");
-const ICON_LIGHTNING: &[u8] = include_bytes!("../assets/icon_lightning.png");
+const ICON_RUN_SVG: &str = include_str!("../assets/icon_run.svg");
+const ICON_RIDE_SVG: &str = include_str!("../assets/icon_bike.svg");
+const ICON_SWIM_SVG: &str = include_str!("../assets/icon_swim.svg");
+
 const ICON_RULER: &[u8] = include_bytes!("../assets/icon_ruler.png");
-const ICON_KUDOS: &[u8] = include_bytes!("../assets/icon_kudos.png");
 const ICON_BAR_CHART: &[u8] = include_bytes!("../assets/icon_bar_chart.png");
 
+/// Rasterize an SVG string to an RGBA image at the given pixel size, with the
+/// specified fill color.
+fn rasterize_svg(svg_str: &str, size: u32, color: Rgb<u8>) -> Option<RgbaImage> {
+  let hex = format!("#{:02X}{:02X}{:02X}", color[0], color[1], color[2]);
+  let colored =
+    svg_str.replace("currentColor", &hex).replace("fill=\"\"", &format!("fill=\"{hex}\""));
+
+  let tree = resvg::usvg::Tree::from_str(&colored, &resvg::usvg::Options::default()).ok()?;
+  let svg_size = tree.size();
+  let sx = size as f32 / svg_size.width();
+  let sy = size as f32 / svg_size.height();
+
+  let mut pixmap = resvg::tiny_skia::Pixmap::new(size, size)?;
+  resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(sx, sy), &mut pixmap.as_mut());
+
+  // Convert from premultiplied to straight alpha
+  let mut data = pixmap.take();
+  for chunk in data.chunks_exact_mut(4) {
+    let a = chunk[3] as f32 / 255.0;
+    if a > 0.0 {
+      chunk[0] = (chunk[0] as f32 / a).min(255.0) as u8;
+      chunk[1] = (chunk[1] as f32 / a).min(255.0) as u8;
+      chunk[2] = (chunk[2] as f32 / a).min(255.0) as u8;
+    }
+  }
+
+  RgbaImage::from_raw(size, size, data)
+}
+
+/// Overlay an SVG icon onto the image at (x, y), rasterized at
+/// SIZE * scale pixels with the given color.
+fn draw_svg_icon(img: &mut RgbImage, x: u32, y: u32, svg: &str, color: Rgb<u8>, scale: u32) {
+  let target_sz = SIZE * scale;
+  let icon = match rasterize_svg(svg, target_sz, color) {
+    Some(i) => i,
+    None => {
+      log::warn!("Failed to rasterize SVG icon");
+      return;
+    },
+  };
+  composite_rgba(img, x, y, &icon, color);
+}
+
 /// Overlay a pre-rendered PNG icon onto the image at (x, y), tinting
-/// non-transparent pixels with the given color. When scale > 1, the icon is
-/// resized up.
-fn draw_icon(img: &mut RgbImage, x: u32, y: u32, icon_bytes: &[u8], color: Rgb<u8>, scale: u32) {
+/// non-transparent pixels with the given color.
+fn draw_png_icon(img: &mut RgbImage,
+                 x: u32,
+                 y: u32,
+                 icon_bytes: &[u8],
+                 color: Rgb<u8>,
+                 scale: u32) {
   let raw = match image::load_from_memory(icon_bytes) {
     Ok(i) => i.to_rgba8(),
     Err(e) => {
@@ -23,12 +69,19 @@ fn draw_icon(img: &mut RgbImage, x: u32, y: u32, icon_bytes: &[u8], color: Rgb<u
     },
   };
 
-  let icon = if scale > 1 {
-    image::imageops::resize(&raw, SIZE * scale, SIZE * scale, image::imageops::FilterType::Triangle)
+  let target_sz = SIZE * scale;
+  let icon = if raw.width() != target_sz || raw.height() != target_sz {
+    image::imageops::resize(&raw, target_sz, target_sz, image::imageops::FilterType::Triangle)
   } else {
     raw
   };
 
+  composite_rgba(img, x, y, &icon, color);
+}
+
+/// Alpha-composite an RGBA icon onto the RGB image, tinting with the given
+/// color.
+fn composite_rgba(img: &mut RgbImage, x: u32, y: u32, icon: &RgbaImage, color: Rgb<u8>) {
   for py in 0..icon.height() {
     for px in 0..icon.width() {
       let p = icon.get_pixel(px, py);
@@ -50,31 +103,23 @@ fn draw_icon(img: &mut RgbImage, x: u32, y: u32, icon_bytes: &[u8], color: Rgb<u
 }
 
 pub fn draw_runner(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_RUN, color, scale);
+  draw_svg_icon(img, x, y, ICON_RUN_SVG, color, scale);
 }
 
 pub fn draw_cyclist(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_RIDE, color, scale);
+  draw_svg_icon(img, x, y, ICON_RIDE_SVG, color, scale);
 }
 
 pub fn draw_swimmer(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_SWIM, color, scale);
-}
-
-pub fn draw_lightning(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_LIGHTNING, color, scale);
+  draw_svg_icon(img, x, y, ICON_SWIM_SVG, color, scale);
 }
 
 pub fn draw_ruler(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_RULER, color, scale);
-}
-
-pub fn draw_thumbs_up(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_KUDOS, color, scale);
+  draw_png_icon(img, x, y, ICON_RULER, color, scale);
 }
 
 pub fn draw_bar_chart(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_icon(img, x, y, ICON_BAR_CHART, color, scale);
+  draw_png_icon(img, x, y, ICON_BAR_CHART, color, scale);
 }
 
 /// Draw the sport-appropriate icon.
@@ -91,42 +136,7 @@ pub fn draw_sport_icon(img: &mut RgbImage,
   }
 }
 
-/// Draw a 12×12 checkered flag at (x, y).
-pub fn draw_checkered_flag(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  // Flagpole
-  for row in 0..12 {
-    for dx in 0..scale {
-      for dy in 0..scale {
-        let ix = x + dx;
-        let iy = y + row * scale + dy;
-        if ix < img.width() && iy < img.height() {
-          img.put_pixel(ix, iy, color);
-        }
-      }
-    }
-  }
-  // 8×6 checkerboard flag
-  for row in 0..6u32 {
-    for col in 0..8u32 {
-      let checker = ((row / 2) + (col / 2)) % 2 == 0;
-      if checker {
-        for dx in 0..scale {
-          for dy in 0..scale {
-            let ix = x + (2 + col) * scale + dx;
-            let iy = y + row * scale + dy;
-            if ix < img.width() && iy < img.height() {
-              img.put_pixel(ix, iy, color);
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
 /// Draw a battery outline at (x, y) with fill level 0.0–1.0.
-/// `outline_color` is used for the frame, `fill_color` for the proportional
-/// fill.
 pub fn draw_battery(img: &mut RgbImage,
                     x: u32,
                     y: u32,
