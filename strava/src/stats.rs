@@ -125,8 +125,12 @@ impl DashboardStats {
                      })
                      .collect();
 
-    // Last activity = first non-commute, public activity (sorted newest-first)
-    let last_eligible = activities.iter().find(|a| a.can_be_displayed());
+    // Last activity = most recent non-commute, public activity by date
+    let last_eligible = activities.iter().filter(|a| a.can_be_displayed()).max_by(|a, b| {
+                                                                            a.start_date_local
+                                                           .as_deref()
+                                                           .cmp(&b.start_date_local.as_deref())
+                                                                          });
     let last_activity = last_eligible.map(|a| {
                                        let sport = a.sport().unwrap_or(SportType::Ride);
                                        to_highlight(a, sport)
@@ -412,5 +416,68 @@ mod tests {
 
     assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 00s"));
     assert_eq!(ten_k.pace.as_deref(), Some("5:00 /km"));
+  }
+
+  fn make_ride(distance_m: f64, moving_time: u32, name: &str, date: &str) -> SummaryActivity {
+    SummaryActivity { activity_type: Some("Ride".to_string()),
+                      sport_type: Some("Ride".to_string()),
+                      ..make_run(distance_m, moving_time, name, date) }
+  }
+
+  fn compute_with(activities: &[SummaryActivity]) -> DashboardStats {
+    let stats = crate::types::AthleteStats::default();
+    DashboardStats::compute(&stats, activities, "Test", false)
+  }
+
+  #[test]
+  fn test_last_activity_picks_most_recent() {
+    let old = make_run(5_000.0, 1500, "January run", "2026-01-01");
+    let recent = make_run(10_000.0, 3000, "March run", "2026-03-25");
+    let mid = make_run(7_000.0, 2000, "February run", "2026-02-15");
+
+    // Oldest-first order (as stored in cache)
+    let stats = compute_with(&[old, mid, recent]);
+    assert_eq!(stats.last_activity.as_ref().unwrap().name, "March run");
+  }
+
+  #[test]
+  fn test_last_activity_picks_most_recent_newest_first() {
+    let old = make_run(5_000.0, 1500, "January run", "2026-01-01");
+    let recent = make_run(10_000.0, 3000, "March run", "2026-03-25");
+
+    // Newest-first order (as returned by online API path)
+    let stats = compute_with(&[recent, old]);
+    assert_eq!(stats.last_activity.as_ref().unwrap().name, "March run");
+  }
+
+  #[test]
+  fn test_last_activity_skips_commute() {
+    let commute = SummaryActivity { commute: true,
+                                    ..make_ride(5_000.0, 900, "Bike commute", "2026-03-25") };
+    let regular = make_run(10_000.0, 3000, "Morning run", "2026-03-20");
+
+    let stats = compute_with(&[regular, commute]);
+    assert_eq!(stats.last_activity.as_ref().unwrap().name, "Morning run");
+  }
+
+  #[test]
+  fn test_last_activity_skips_private() {
+    let private = SummaryActivity { private: true,
+                                    ..make_run(8_000.0, 2400, "Secret run", "2026-03-25") };
+    let public = make_run(5_000.0, 1500, "Public run", "2026-03-20");
+
+    let stats = compute_with(&[public, private]);
+    assert_eq!(stats.last_activity.as_ref().unwrap().name, "Public run");
+  }
+
+  #[test]
+  fn test_last_activity_none_when_all_filtered() {
+    let commute = SummaryActivity { commute: true,
+                                    ..make_ride(5_000.0, 900, "Commute", "2026-03-25") };
+    let private = SummaryActivity { private: true,
+                                    ..make_run(8_000.0, 2400, "Private", "2026-03-20") };
+
+    let stats = compute_with(&[commute, private]);
+    assert!(stats.last_activity.is_none());
   }
 }
