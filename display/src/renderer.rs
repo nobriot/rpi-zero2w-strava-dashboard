@@ -64,21 +64,23 @@ impl Scale {
 
 /// Dashboard display configuration.
 pub struct DisplayConfig {
-  pub goals:              Vec<GoalConfig>,
-  pub polyline_thickness: u32,
-  pub show_totals:        bool,
+  pub goals:                Vec<GoalConfig>,
+  pub polyline_thickness:   u32,
+  pub show_totals:          bool,
+  pub show_longest_fastest: bool,
 }
 
 impl Default for DisplayConfig {
   fn default() -> Self {
-    Self { goals:              vec![GoalConfig { sport: SportType::Ride,
-                                                 km:    5000.0, },
-                                    GoalConfig { sport: SportType::Run,
-                                                 km:    500.0, },
-                                    GoalConfig { sport: SportType::Swim,
-                                                 km:    20.0, },],
-           polyline_thickness: 3,
-           show_totals:        true, }
+    Self { goals:                vec![GoalConfig { sport: SportType::Ride,
+                                                   km:    5000.0, },
+                                      GoalConfig { sport: SportType::Run,
+                                                   km:    500.0, },
+                                      GoalConfig { sport: SportType::Swim,
+                                                   km:    20.0, },],
+           polyline_thickness:   3,
+           show_totals:          true,
+           show_longest_fastest: true, }
   }
 }
 
@@ -115,14 +117,19 @@ struct Layout {
 }
 
 impl Layout {
-  fn compute(stats: &DashboardStats, n_goals: usize, show_totals: bool, s: Scale) -> Self {
+  fn compute(stats: &DashboardStats,
+             n_goals: usize,
+             show_totals: bool,
+             show_longest_fastest: bool,
+             s: Scale)
+             -> Self {
     // With 3 goals, the 2nd and 3rd share a row → 2 visual rows max
     let n_bar_rows = n_goals.min(2) as i32;
     let n_lf = count_longest_fastest_entries(stats) as i32;
 
     let base_bars = n_bar_rows * 34;
     let base_totals = if show_totals { 38 } else { 0 };
-    let base_lf = 30 + n_lf * 36;
+    let base_lf = if show_longest_fastest { 30 + n_lf * 36 } else { 0 };
     let base_last = 64;
     let base_gaps = 32;
     let needed = HEADER_H as i32 + base_bars + base_totals + base_lf + base_last + base_gaps;
@@ -165,7 +172,8 @@ pub fn render_dashboard(stats: &DashboardStats,
   let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
   let font_symbol = FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
   let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
-  let layout = Layout::compute(stats, config.goals.len(), config.show_totals, s);
+  let layout =
+    Layout::compute(stats, config.goals.len(), config.show_totals, config.show_longest_fastest, s);
 
   draw_header(&mut img, &font_bold, stats, avatar, s);
 
@@ -175,15 +183,19 @@ pub fn render_dashboard(stats: &DashboardStats,
   } else {
     y
   };
-  let y = draw_longest_fastest(&mut img,
-                               &font,
-                               &font_bold,
-                               &font_symbol,
-                               &font_emoji,
-                               stats,
-                               y,
-                               &layout,
-                               s);
+  let y = if config.show_longest_fastest {
+    draw_longest_fastest(&mut img,
+                         &font,
+                         &font_bold,
+                         &font_symbol,
+                         &font_emoji,
+                         stats,
+                         y,
+                         &layout,
+                         s)
+  } else {
+    y
+  };
   draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, s);
 
   draw_battery_indicator(&mut img, &font_bold, battery, is_offline, s);

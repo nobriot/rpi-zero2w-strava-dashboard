@@ -1,5 +1,6 @@
 /target
 /tmp
 /rpi-assets
+/tests
 *.png
 !display/assets/*.png

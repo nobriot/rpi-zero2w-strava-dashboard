@@ -26,6 +26,10 @@ quiet_end_hour = 8
 # Set to false to hide it and give more space to other sections. Default: true.
 show_totals = true
 
+# Show the LONGEST / FASTEST section (longest activities per sport + best race paces).
+# Set to false to hide it and give more space to other sections. Default: true.
+show_longest_fastest = true
+
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 3
 
