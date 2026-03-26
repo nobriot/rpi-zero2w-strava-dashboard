@@ -32,6 +32,14 @@ const ICON_SZ: u32 = icons::SIZE;
 const DIVIDER_THICKNESS: u32 = 1;
 const BAR_BORDER_THICKNESS: u32 = 1;
 
+// Text style hierarchy
+const TITLE_COLOR: Rgb<u8> = RED;
+const TITLE_FONT_SZ: f32 = 24.0;
+const MAIN_COLOR: Rgb<u8> = BLACK;
+const MAIN_FONT_SZ: f32 = 18.0;
+const SECONDARY_COLOR: Rgb<u8> = BLACK;
+const SECONDARY_FONT_SZ: f32 = 18.0;
+
 /// Resolution scale factor for rendering.
 #[derive(Clone, Copy)]
 pub struct Scale(u32);
@@ -560,9 +568,15 @@ fn draw_totals_row(img: &mut RgbImage,
 
   // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
   let y = sep_y + s.i(10);
-  icons::draw_bar_chart(img, s.u(MARGIN as u32), (y - s.i(6)) as u32, ORANGE, s.factor());
+  icons::draw_bar_chart(img, s.u(MARGIN as u32), (y - s.i(6)) as u32, TITLE_COLOR, s.factor());
   let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
-  draw_text_mut(img, ORANGE, s.i(MARGIN) + icon_w, y, s.px(24.0), font_bold, TOTALS);
+  draw_text_mut(img,
+                TITLE_COLOR,
+                s.i(MARGIN) + icon_w,
+                y,
+                s.px(TITLE_FONT_SZ),
+                font_bold,
+                TOTALS);
 
   let center_text = format!("{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
                             stats.activity_count,
@@ -570,9 +584,9 @@ fn draw_totals_row(img: &mut RgbImage,
                             stats.total_time_display(),
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
-  let text_w = measure_text_width(font, s.px(18.0), &center_text) as i32;
+  let text_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &center_text) as i32;
   let center_x = (s.u(W) as i32 - text_w) / 2;
-  draw_text_mut(img, BLACK, center_x, y, s.px(18.0), font, &center_text);
+  draw_text_mut(img, SECONDARY_COLOR, center_x, y, s.px(SECONDARY_FONT_SZ), font, &center_text);
 
   // Extra space after
   y + s.i(32)
@@ -602,13 +616,13 @@ fn draw_longest_fastest(img: &mut RgbImage,
   let entry_h = layout.lf_entry_h;
 
   // Left: LONGEST (ruler icon in black for contrast on e-paper)
-  let section_icon_scale = s.px(27.0);
-  icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, BLACK, s.factor());
+  let section_title_scale = s.px(TITLE_FONT_SZ);
+  icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
   draw_text_mut(img,
-                ORANGE,
+                TITLE_COLOR,
                 s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
                 y,
-                section_icon_scale,
+                section_title_scale,
                 font_bold,
                 "LONGEST");
 
@@ -653,12 +667,12 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
   // Right: FASTEST (zap icon, run race bests — always 3 buckets)
   let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
-  icons::draw_zap(img, right_x as u32, y as u32, BLACK, s.factor());
+  icons::draw_zap(img, right_x as u32, y as u32, TITLE_COLOR, s.factor());
   draw_text_mut(img,
-                ORANGE,
+                TITLE_COLOR,
                 right_x + s.u(ICON_SZ) as i32 + s.i(4),
                 y,
-                section_icon_scale,
+                section_title_scale,
                 font_bold,
                 "FASTEST");
 
@@ -731,7 +745,13 @@ fn draw_last_activity(img: &mut RgbImage,
 
   if let Some(ref last) = stats.last_activity {
     // "LAST ACTIVITY" title
-    draw_text_mut(img, ORANGE, s.i(MARGIN), y, s.px(24.0), font_bold, "LAST ACTIVITY");
+    draw_text_mut(img,
+                  TITLE_COLOR,
+                  s.i(MARGIN),
+                  y,
+                  s.px(TITLE_FONT_SZ),
+                  font_bold,
+                  "LAST ACTIVITY");
 
     // First line: sport icon + name · date
     let line1_x = s.i(MARGIN);
@@ -743,10 +763,10 @@ fn draw_last_activity(img: &mut RgbImage,
                            s.factor());
     let line1 = format!("{}  ·  {}", truncate_str(&last.name, 30), last.date);
     draw_text_with_fallback(img,
-                            BLACK,
+                            MAIN_COLOR,
                             line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                             y + s.i(24),
-                            s.px(18.0),
+                            s.px(MAIN_FONT_SZ),
                             font_bold,
                             font_emoji,
                             &line1);
@@ -754,20 +774,30 @@ fn draw_last_activity(img: &mut RgbImage,
     let line2 = format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
                         last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos);
     draw_text_mut(img,
-                  BLACK,
+                  SECONDARY_COLOR,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
                   y + s.i(48),
-                  s.px(18.0),
+                  s.px(SECONDARY_FONT_SZ),
                   font,
                   &line2);
 
     // Polyline: starts right of the detail text lines so they don't overlap.
     // Measure the wider of the two text lines to find the safe start.
-    let line1_w = measure_text_width(font_bold, s.px(18.0), &line1) as i32;
-    let line2_w = measure_text_width(font, s.px(18.0), &line2) as i32;
+    let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
+    let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
     let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
     let polyline_x = text_right + s.i(16);
     draw_polyline(img, stats, y, polyline_x, is_offline, config, s);
+  }
+
+  // Total kudos — right-aligned, above battery indicator area
+  if stats.total_kudos > 0 {
+    let kudos_text = format!("TOTAL KUDOS: {}", stats.total_kudos);
+    let kudos_scale = s.px(SECONDARY_FONT_SZ);
+    let kudos_w = measure_text_width(font_bold, kudos_scale, &kudos_text) as i32;
+    let kudos_x = s.u(W) as i32 - s.i(MARGIN) - kudos_w;
+    let kudos_y = s.u(H) as i32 - s.i(58);
+    draw_text_mut(img, SECONDARY_COLOR, kudos_x, kudos_y, kudos_scale, font_bold, &kudos_text);
   }
 }
 

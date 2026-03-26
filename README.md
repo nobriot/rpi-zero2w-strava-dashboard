@@ -18,6 +18,9 @@ TODO:Insert a picture
 Witty Pi 4 Mini ?
 https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
 
+just add-wifi : create a nmconnection file
+just deploy-config: send a config file to the target
+
 ## What It Does
 
 Displays your Strava stats on a 7.3" 6-color e-paper display:
@@ -79,11 +82,31 @@ scp install/strava-dashboard.service pi@<host>:/etc/systemd/system/
 ssh pi@<host> 'sudo systemctl daemon-reload && sudo systemctl enable --now strava-dashboard'
 ```
 
+or use just: 
+
+```bash
+just dev
+```
+
+Then run the strava auth - to allow your application to pull your data:
+
+
+```bash
+just strava-auth
+```
+
+Finally, deploy to the RPi:
+
+```bash
+just deploy pi@<host>
+just deploy-config <config.toml>
+```
+
 ---
 
 ## Architecture
 
-Cargo workspace with 5 crates:
+Cargo workspace with 3 crates:
 
 | Crate | Type | Runs on | Purpose |
 |-------|------|---------|---------|
@@ -95,25 +118,8 @@ Cargo workspace with 5 crates:
 
 ## Configuration
 
-Config file: `~/.config/rpi-zero2w-strava-dash/config.toml`
-
-```toml
-# Strava API credentials
-[strava]
-client_id = "YOUR_CLIENT_ID"
-client_secret = "YOUR_CLIENT_SECRET"
-refresh_token = "YOUR_REFRESH_TOKEN" # Optional
-
-[display]
-sleep_interval_secs = 10800  # 3 hours
-quiet_start_hour = 20        # No refresh 20:00–08:00
-quiet_end_hour = 8
-run_goal_km = 2000.0
-ride_goal_km = 5000.0
-swim_goal_km = 200.0
-```
-
-The refresh token is automatically updated when it changes.
+See the `config.example.toml` for available keys.
+Config file (default): `~/.config/rpi-zero2w-strava-dash/config.toml`
 
 ---
 
@@ -140,14 +146,6 @@ RUST_LOG=debug cargo run -- --once   # Run once with debug logging
 ```
 
 Requires Rust edition 2024 (rust-version 1.93+).
-
----
-
-## Network Resilience
-
-- **Auto token refresh**: On HTTP 401, the client automatically refreshes the access token and retries
-- **Offline mode**: When network is unavailable, an offline screen is shown on the display
-- **Cache**: API responses are cached locally with configurable TTL (3 hours default, 7 days for athlete data)
 
 ---
 

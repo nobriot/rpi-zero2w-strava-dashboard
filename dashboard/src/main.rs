@@ -136,7 +136,7 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
       Some(status)
     },
     Err(e) => {
-      log::debug!("Battery monitor unavailable: {e}");
+      log::info!("Battery monitor unavailable: {e}");
       None
     },
   };
