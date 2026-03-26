@@ -119,6 +119,41 @@ impl Cache {
       Err(e) => log::warn!("Failed to serialize cache entry '{key}': {e}"),
     }
   }
+
+  /// Scan for per-athlete subdirectories and return the most recently used
+  /// one (by modification time of cached files). Returns `None` if no
+  /// per-athlete subdirectories exist.
+  pub fn most_recent_athlete_cache(&self) -> Option<Self> {
+    let entries = fs::read_dir(&self.dir).ok()?;
+    let mut best: Option<(PathBuf, SystemTime)> = None;
+
+    for entry in entries.flatten() {
+      let path = entry.path();
+      if !path.is_dir() {
+        continue;
+      }
+      // Only consider numeric subdirectories (athlete IDs)
+      let is_athlete_dir =
+        path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.parse::<u64>().is_ok());
+      if !is_athlete_dir {
+        continue;
+      }
+
+      let mtime = ["stats.json", "activities.json", "athlete.json"].iter()
+                                                                    .filter_map(|f| {
+                                                                      fs::metadata(path.join(f)).and_then(|m| m.modified()).ok()
+                                                                    })
+                                                                    .max()
+                                                                    .unwrap_or(UNIX_EPOCH);
+
+      if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
+        best = Some((path, mtime));
+      }
+    }
+
+    best.map(|(path, _)| Self { dir:             path,
+                                default_max_age: self.default_max_age, })
+  }
 }
 
 impl Default for Cache {

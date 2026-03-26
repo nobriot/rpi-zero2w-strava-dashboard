@@ -251,19 +251,18 @@ fn fetch_stats_online(config: &strava::config::Config,
 }
 
 /// Offline fallback: load stale cached data and build dashboard from whatever
-/// is available.
+/// is available. Scans per-athlete subdirectories and picks the most recently
+/// used one.
 fn fetch_stats_from_cache(show_all_sports: bool)
                           -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
-  // Athlete lives at root level; scope to per-athlete dir for stats/activities
-  let athlete: Option<strava::types::DetailedAthlete> = cache.load_stale("athlete");
-  let firstname = athlete.as_ref().and_then(|a| a.firstname.as_deref()).unwrap_or("Athlete");
+  let athlete_cache =
+    cache.most_recent_athlete_cache()
+         .ok_or_else(|| DashError::Config("No cached athlete data found".to_string()))?;
 
-  let athlete_cache = match athlete.as_ref() {
-    Some(a) => cache.for_athlete(a.id),
-    None => cache,
-  };
+  let athlete: Option<strava::types::DetailedAthlete> = athlete_cache.load_stale("athlete");
+  let firstname = athlete.as_ref().and_then(|a| a.firstname.as_deref()).unwrap_or("Athlete");
 
   let stats: strava::types::AthleteStats = athlete_cache.load_stale("stats").unwrap_or_default();
 

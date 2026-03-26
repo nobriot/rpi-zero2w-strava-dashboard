@@ -117,16 +117,11 @@ impl Client {
     Ok(response)
   }
 
-  /// GET /athlete — returns the authenticated athlete. Uses cache.
-  /// After a successful fetch, scopes the cache to a per-athlete subdirectory
-  /// so that stats/activities are stored per-athlete.
+  /// GET /athlete — returns the authenticated athlete.
+  /// Always fetches from the API so the correct athlete is returned for the
+  /// current config (avoids cross-contamination when multiple accounts share
+  /// the cache directory). Scopes the cache to a per-athlete subdirectory.
   pub fn get_athlete(&mut self) -> Result<DetailedAthlete, StravaError> {
-    // Athlete entry lives at root cache level (we need it to discover the ID)
-    if let Some(cached) = self.cache.load::<DetailedAthlete>("athlete") {
-      self.cache = self.cache.for_athlete(cached.id);
-      return Ok(cached);
-    }
-
     let response = self.strava_api_get("athlete")?;
     let body = response.text().map_err(|_| StravaError::StravaApiResponseMissingBody)?;
     log::debug!("JSON:\n{body}");
@@ -135,11 +130,9 @@ impl Client {
                                      StravaError::StravaApiResponseDeserializationError(body)
                                    })?;
 
-    // Save athlete at root level so offline fallback can find it without
-    // knowing the ID upfront.
-    self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
-    // Switch to per-athlete dir for stats/activities
+    // Switch to per-athlete dir, then save athlete there
     self.cache = self.cache.for_athlete(athlete.id);
+    self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
     Ok(athlete)
   }
 
