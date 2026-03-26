@@ -1,3 +1,7 @@
+# List available recipes
+default:
+    @just --list
+
 # Run all workspace tests (unit + snapshot)
 test:
     RUST_MIN_STACK=16777216 cargo test --workspace
