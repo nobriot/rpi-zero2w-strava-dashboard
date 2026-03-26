@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Default cache TTL: 3 hours
@@ -27,6 +27,17 @@ impl Cache {
 
     Self { dir,
            default_max_age: DEFAULT_MAX_AGE_SECS }
+  }
+
+  /// Return a new Cache scoped to a per-athlete subdirectory.
+  pub fn for_athlete(&self, athlete_id: u64) -> Self {
+    Self { dir:             self.dir.join(athlete_id.to_string()),
+           default_max_age: self.default_max_age, }
+  }
+
+  /// The cache directory path.
+  pub fn dir(&self) -> &Path {
+    &self.dir
   }
 
   /// Delete the entire cache directory.

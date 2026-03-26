@@ -550,8 +550,11 @@ dependencies = [
  "log",
  "resvg",
  "rppal",
+ "serde",
+ "serde_json",
  "strava",
  "thiserror 2.0.18",
+ "toml",
 ]
 
 [[package]]

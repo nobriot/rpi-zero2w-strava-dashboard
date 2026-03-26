@@ -118,8 +118,12 @@ impl Client {
   }
 
   /// GET /athlete — returns the authenticated athlete. Uses cache.
+  /// After a successful fetch, scopes the cache to a per-athlete subdirectory
+  /// so that stats/activities are stored per-athlete.
   pub fn get_athlete(&mut self) -> Result<DetailedAthlete, StravaError> {
+    // Athlete entry lives at root cache level (we need it to discover the ID)
     if let Some(cached) = self.cache.load::<DetailedAthlete>("athlete") {
+      self.cache = self.cache.for_athlete(cached.id);
       return Ok(cached);
     }
 
@@ -131,8 +135,17 @@ impl Client {
                                      StravaError::StravaApiResponseDeserializationError(body)
                                    })?;
 
+    // Save athlete at root level so offline fallback can find it without
+    // knowing the ID upfront.
     self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
+    // Switch to per-athlete dir for stats/activities
+    self.cache = self.cache.for_athlete(athlete.id);
     Ok(athlete)
+  }
+
+  /// The current cache directory (per-athlete after `get_athlete`).
+  pub fn cache_dir(&self) -> &std::path::Path {
+    self.cache.dir()
   }
 
   /// Download raw bytes from any URL (no authentication).

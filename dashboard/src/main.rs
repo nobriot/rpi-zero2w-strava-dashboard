@@ -256,15 +256,21 @@ fn fetch_stats_from_cache(show_all_sports: bool)
                           -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
+  // Athlete lives at root level; scope to per-athlete dir for stats/activities
   let athlete: Option<strava::types::DetailedAthlete> = cache.load_stale("athlete");
   let firstname = athlete.as_ref().and_then(|a| a.firstname.as_deref()).unwrap_or("Athlete");
 
-  let stats: strava::types::AthleteStats = cache.load_stale("stats").unwrap_or_default();
+  let athlete_cache = match athlete.as_ref() {
+    Some(a) => cache.for_athlete(a.id),
+    None => cache,
+  };
+
+  let stats: strava::types::AthleteStats = athlete_cache.load_stale("stats").unwrap_or_default();
 
   let activities: Vec<strava::types::SummaryActivity> =
-    cache.load_stale("activities").unwrap_or_default();
+    athlete_cache.load_stale("activities").unwrap_or_default();
 
-  let avatar = std::fs::read(avatar_cache_path()).ok();
+  let avatar = std::fs::read(athlete_cache.dir().join("avatar.img")).ok();
 
   log::info!("Offline fallback: athlete={}, activities={}", firstname, activities.len(),);
 
@@ -317,10 +323,11 @@ fn seconds_until_quiet_end(display: &strava::config::DisplayConfig) -> u64 {
 }
 
 /// Load avatar from cache or fetch from Strava CDN.
+/// Uses the per-athlete cache directory (available after `get_athlete`).
 fn load_or_fetch_avatar(client: &strava::client::Client,
                         profile_url: Option<&str>)
                         -> Option<Vec<u8>> {
-  let cache_path = avatar_cache_path();
+  let cache_path = client.cache_dir().join("avatar.img");
 
   // Use cached file if it exists
   if cache_path.exists() {
@@ -349,10 +356,4 @@ fn load_or_fetch_avatar(client: &strava::client::Client,
       None
     },
   }
-}
-
-fn avatar_cache_path() -> PathBuf {
-  dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".cache"))
-                   .join("rpi-zero2w-strava-dash")
-                   .join("avatar.img")
 }
