@@ -7,15 +7,17 @@ const ICON_RUN_SVG: &str = include_str!("../assets/icon_run.svg");
 const ICON_RIDE_SVG: &str = include_str!("../assets/icon_bike.svg");
 const ICON_SWIM_SVG: &str = include_str!("../assets/icon_swim.svg");
 
-const ICON_RULER: &[u8] = include_bytes!("../assets/icon_ruler.png");
-const ICON_BAR_CHART: &[u8] = include_bytes!("../assets/icon_bar_chart.png");
+const ICON_RULER_SVG: &str = include_str!("../assets/icon_ruler.svg");
+const ICON_BAR_CHART_SVG: &str = include_str!("../assets/icon_bar_chart.svg");
+const ICON_ZAP_SVG: &str = include_str!("../assets/icon_zap.svg");
 
 /// Rasterize an SVG string to an RGBA image at the given pixel size, with the
 /// specified fill color.
 fn rasterize_svg(svg_str: &str, size: u32, color: Rgb<u8>) -> Option<RgbaImage> {
   let hex = format!("#{:02X}{:02X}{:02X}", color[0], color[1], color[2]);
-  let colored =
-    svg_str.replace("currentColor", &hex).replace("fill=\"\"", &format!("fill=\"{hex}\""));
+  let colored = svg_str.replace("currentColor", &hex)
+                       .replace("fill=\"\"", &format!("fill=\"{hex}\""))
+                       .replace("stroke=\"\"", &format!("stroke=\"{hex}\""));
 
   let tree = resvg::usvg::Tree::from_str(&colored, &resvg::usvg::Options::default()).ok()?;
   let svg_size = tree.size();
@@ -50,32 +52,6 @@ fn draw_svg_icon(img: &mut RgbImage, x: u32, y: u32, svg: &str, color: Rgb<u8>, 
       return;
     },
   };
-  composite_rgba(img, x, y, &icon, color);
-}
-
-/// Overlay a pre-rendered PNG icon onto the image at (x, y), tinting
-/// non-transparent pixels with the given color.
-fn draw_png_icon(img: &mut RgbImage,
-                 x: u32,
-                 y: u32,
-                 icon_bytes: &[u8],
-                 color: Rgb<u8>,
-                 scale: u32) {
-  let raw = match image::load_from_memory(icon_bytes) {
-    Ok(i) => i.to_rgba8(),
-    Err(e) => {
-      log::warn!("Failed to decode icon: {e}");
-      return;
-    },
-  };
-
-  let target_sz = SIZE * scale;
-  let icon = if raw.width() != target_sz || raw.height() != target_sz {
-    image::imageops::resize(&raw, target_sz, target_sz, image::imageops::FilterType::Triangle)
-  } else {
-    raw
-  };
-
   composite_rgba(img, x, y, &icon, color);
 }
 
@@ -115,11 +91,15 @@ pub fn draw_swimmer(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u
 }
 
 pub fn draw_ruler(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_png_icon(img, x, y, ICON_RULER, color, scale);
+  draw_svg_icon(img, x, y, ICON_RULER_SVG, color, scale);
 }
 
 pub fn draw_bar_chart(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
-  draw_png_icon(img, x, y, ICON_BAR_CHART, color, scale);
+  draw_svg_icon(img, x, y, ICON_BAR_CHART_SVG, color, scale);
+}
+
+pub fn draw_zap(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_ZAP_SVG, color, scale);
 }
 
 /// Draw the sport-appropriate icon.

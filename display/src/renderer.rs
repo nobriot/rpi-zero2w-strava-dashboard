@@ -184,15 +184,7 @@ pub fn render_dashboard(stats: &DashboardStats,
     y
   };
   let y = if config.show_longest_fastest {
-    draw_longest_fastest(&mut img,
-                         &font,
-                         &font_bold,
-                         &font_symbol,
-                         &font_emoji,
-                         stats,
-                         y,
-                         &layout,
-                         s)
+    draw_longest_fastest(&mut img, &font, &font_bold, &font_emoji, stats, y, &layout, s)
   } else {
     y
   };
@@ -590,7 +582,6 @@ fn draw_totals_row(img: &mut RgbImage,
 fn draw_longest_fastest(img: &mut RgbImage,
                         font: &FontRef,
                         font_bold: &FontRef,
-                        font_symbol: &FontRef,
                         font_emoji: &FontRef,
                         stats: &DashboardStats,
                         y_start: i32,
@@ -660,12 +651,16 @@ fn draw_longest_fastest(img: &mut RgbImage,
     left_y += entry_h;
   }
 
-  // Right: FASTEST (bolt icon, run race bests — always 3 buckets)
+  // Right: FASTEST (zap icon, run race bests — always 3 buckets)
   let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
-  draw_text_mut(img, BLACK, right_x, y, section_icon_scale, font_symbol, "\u{F0E7} ");
-  let bolt_icon_w =
-    measure_text_width(font_symbol, section_icon_scale, "\u{F0E7} ") as i32 + s.i(4);
-  draw_text_mut(img, ORANGE, right_x + bolt_icon_w, y, section_icon_scale, font_bold, "FASTEST");
+  icons::draw_zap(img, right_x as u32, y as u32, BLACK, s.factor());
+  draw_text_mut(img,
+                ORANGE,
+                right_x + s.u(ICON_SZ) as i32 + s.i(4),
+                y,
+                section_icon_scale,
+                font_bold,
+                "FASTEST");
 
   let mut right_y = y + s.i(26);
 
