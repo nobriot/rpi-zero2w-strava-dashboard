@@ -130,3 +130,44 @@ deploy host:
     scp install/strava-dashboard.service {{host}}:/tmp/strava-dashboard.service
     ssh {{host}} 'sudo mv /tmp/strava-dashboard /usr/local/bin/strava-dashboard && sudo mv /tmp/strava-dashboard.service /etc/systemd/system/strava-dashboard.service && sudo systemctl daemon-reload && sudo systemctl restart strava-dashboard'
     @echo "Deployed and restarted strava-dashboard on {{host}}"
+
+# Deploy a config file as default config on RPi (e.g. just deploy-config pi@rpi tests/nicolas.toml)
+deploy-config host config:
+    ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dash'
+    scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dash/config.toml
+    @echo "Config deployed to {{host}}:~/.config/rpi-zero2w-strava-dash/config.toml"
+
+# Generate a NetworkManager .nmconnection file for WiFi (e.g. just wifi MySSID MyPassword)
+wifi ssid password:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uuid=$(uuidgen)
+    file="tmp/{{ssid}}.nmconnection"
+    mkdir -p tmp
+    cat > "$file" <<EOF
+    [connection]
+    id={{ssid}}
+    uuid=${uuid}
+    type=wifi
+    autoconnect=true
+
+    [wifi]
+    mode=infrastructure
+    ssid={{ssid}}
+
+    [wifi-security]
+    key-mgmt=wpa-psk
+    psk={{password}}
+
+    [ipv4]
+    method=auto
+
+    [ipv6]
+    method=auto
+    EOF
+    # Strip leading whitespace (just indentation)
+    sed -i 's/^    //' "$file"
+    chmod 600 "$file"
+    echo "Generated: $file"
+    echo "To deploy to SD card:"
+    echo "  sudo cp $file /path/to/sdcard/etc/NetworkManager/system-connections/"
