@@ -229,9 +229,15 @@ fn draw_battery_indicator(img: &mut RgbImage,
     draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
   }
 
-  let y = s.u(H) as i32 - s.i(16);
+  let y = s.u(H) as i32 - s.i(MARGIN);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
-  icons::draw_battery(img, (x + text_w + gap) as u32, y as u32, BLACK, GREEN, bat_fill, s.factor());
+  icons::draw_battery(img,
+                      (x + text_w + gap) as u32,
+                      (y + 2) as u32,
+                      BLACK,
+                      GREEN,
+                      bat_fill,
+                      s.factor());
 }
 
 fn draw_header(img: &mut RgbImage,
@@ -790,14 +796,12 @@ fn draw_last_activity(img: &mut RgbImage,
     draw_polyline(img, stats, y, polyline_x, is_offline, config, s);
   }
 
-  // Total kudos — right-aligned, above battery indicator area
-  if stats.total_kudos > 0 {
+  // Total kudos — bottom-left corner (only when TOTALS section is hidden)
+  if !config.show_totals && stats.total_kudos > 0 {
     let kudos_text = format!("TOTAL KUDOS: {}", stats.total_kudos);
     let kudos_scale = s.px(SECONDARY_FONT_SZ);
-    let kudos_w = measure_text_width(font_bold, kudos_scale, &kudos_text) as i32;
-    let kudos_x = s.u(W) as i32 - s.i(MARGIN) - kudos_w;
-    let kudos_y = s.u(H) as i32 - s.i(58);
-    draw_text_mut(img, SECONDARY_COLOR, kudos_x, kudos_y, kudos_scale, font_bold, &kudos_text);
+    let kudos_y = s.u(H) as i32 - s.i(MARGIN);
+    draw_text_mut(img, SECONDARY_COLOR, s.i(MARGIN), kudos_y, kudos_scale, font_bold, &kudos_text);
   }
 }
 
