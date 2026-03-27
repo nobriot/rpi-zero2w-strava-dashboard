@@ -100,8 +100,9 @@ impl SummaryActivity {
   /// Format pace as "M:SS /km"
   pub fn format_pace_per_km(&self) -> String {
     if let Some(pace) = self.avg_pace_min_per_km() {
-      let minutes = pace.floor() as u32;
-      let seconds = ((pace - minutes as f64) * 60.0).round() as u32;
+      let total_secs = (pace * 60.0).round() as u32;
+      let minutes = total_secs / 60;
+      let seconds = total_secs % 60;
       format!("{minutes}:{seconds:02} /km")
     } else {
       "--:-- /km".to_string()
@@ -165,9 +166,9 @@ impl SummaryActivity {
   /// Format pace as "M:SS /100m" (for swimming)
   pub fn format_pace_per_100m(&self) -> String {
     if self.distance > 0.0 {
-      let pace_secs = self.moving_time as f64 / (self.distance / 100.0);
-      let minutes = (pace_secs / 60.0).floor() as u32;
-      let seconds = (pace_secs % 60.0).round() as u32;
+      let total_secs = (self.moving_time as f64 / (self.distance / 100.0)).round() as u32;
+      let minutes = total_secs / 60;
+      let seconds = total_secs % 60;
       format!("{minutes}:{seconds:02} /100m")
     } else {
       "--:-- /100m".to_string()

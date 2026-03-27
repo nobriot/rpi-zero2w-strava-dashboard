@@ -161,8 +161,9 @@ impl ActivityTotal {
   /// Format pace as "M:SS /km"
   pub fn format_pace_per_km(&self) -> String {
     if let Some(pace) = self.avg_pace_min_per_km() {
-      let minutes = pace.floor() as u32;
-      let seconds = ((pace - minutes as f64) * 60.0).round() as u32;
+      let total_secs = (pace * 60.0).round() as u32;
+      let minutes = total_secs / 60;
+      let seconds = total_secs % 60;
       format!("{}:{:02} /km", minutes, seconds)
     } else {
       "--:-- /km".to_string()
@@ -172,8 +173,9 @@ impl ActivityTotal {
   /// Format pace as "M:SS /mi"
   pub fn format_pace_per_mile(&self) -> String {
     if let Some(pace) = self.avg_pace_min_per_mile() {
-      let minutes = pace.floor() as u32;
-      let seconds = ((pace - minutes as f64) * 60.0).round() as u32;
+      let total_secs = (pace * 60.0).round() as u32;
+      let minutes = total_secs / 60;
+      let seconds = total_secs % 60;
       format!("{}:{:02} /mi", minutes, seconds)
     } else {
       "--:-- /mi".to_string()

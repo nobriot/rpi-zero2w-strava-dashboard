@@ -289,9 +289,9 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
                   Some(b) => {
                     let estimated_secs = b.moving_time as f64 * target_km / b.distance_km();
                     let est_time = format_estimated_time(estimated_secs);
-                    let pace_min = estimated_secs / 60.0 / target_km;
-                    let pace_whole = pace_min.floor() as u32;
-                    let pace_frac = ((pace_min - pace_whole as f64) * 60.0).round() as u32;
+                    let total_pace_secs = (estimated_secs / target_km).round() as u32;
+                    let pace_whole = total_pace_secs / 60;
+                    let pace_frac = total_pace_secs % 60;
                     let pace = format!("{pace_whole}:{pace_frac:02} /km");
 
                     RunRaceBest { label,
