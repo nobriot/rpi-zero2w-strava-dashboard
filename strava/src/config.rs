@@ -79,6 +79,12 @@ pub struct DisplayConfig {
   /// Whether to show the LONGEST / FASTEST section (default: true).
   #[serde(default = "default_show_longest_fastest")]
   pub show_longest_fastest: bool,
+
+  /// Power off the Pi between refresh cycles to extend battery life.
+  /// Uses `rtcwake` with the DS3231 RTC to schedule the next boot.
+  /// Falls back to plain `shutdown` if `rtcwake` is unavailable.
+  #[serde(default)]
+  pub shutdown_after_cycle: bool,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -116,7 +122,8 @@ impl Default for DisplayConfig {
            goals:                default_goals(),
            polyline_thickness:   default_polyline_thickness(),
            show_totals:          default_show_totals(),
-           show_longest_fastest: default_show_longest_fastest(), }
+           show_longest_fastest: default_show_longest_fastest(),
+           shutdown_after_cycle: false, }
   }
 }
 

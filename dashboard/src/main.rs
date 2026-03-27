@@ -9,6 +9,7 @@ use crate::errors::DashError;
 use args::Args;
 use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
 use std::path::PathBuf;
+use std::process::Command;
 
 const STYLES: styling::Styles =
   styling::Styles::styled().header(styling::AnsiColor::Green.on_default().bold())
@@ -116,10 +117,123 @@ fn run() -> Result<()> {
       sleep_secs
     };
 
+    if config.display.shutdown_after_cycle && try_rtcwake_shutdown(sleep_duration) {
+      // rtcwake initiated poweroff — systemd will restart us on next boot
+      break;
+    }
+    // If shutdown_after_cycle is set but rtcwake failed, fall through to normal
+    // sleep
+
     std::thread::sleep(std::time::Duration::from_secs(sleep_duration));
   }
 
   Ok(())
+}
+
+/// Log diagnostic info about RTC readiness for shutdown_after_cycle.
+fn log_rtc_diagnostics() {
+  use std::fs;
+  use std::path::Path;
+
+  // Check /dev/rtc0
+  let rtc_exists = Path::new("/dev/rtc0").exists();
+  if rtc_exists {
+    log::info!("RTC: /dev/rtc0 exists");
+  } else {
+    log::warn!("RTC: /dev/rtc0 not found — is dtoverlay=i2c-rtc,ds3231 in /boot/config.txt?");
+  }
+
+  // Check RTC chip identity
+  match fs::read_to_string("/sys/class/rtc/rtc0/name") {
+    Ok(name) => {
+      let name = name.trim();
+      if name.contains("ds3231") {
+        log::info!("RTC: chip identified as {name}");
+      } else {
+        log::warn!("RTC: chip is {name} (expected ds3231)");
+      }
+    },
+    Err(_) => log::warn!("RTC: could not read /sys/class/rtc/rtc0/name"),
+  }
+
+  // Check RTC time vs system time
+  match fs::read_to_string("/sys/class/rtc/rtc0/since_epoch") {
+    Ok(epoch_str) => {
+      if let Ok(rtc_epoch) = epoch_str.trim().parse::<i64>() {
+        let sys_epoch = Utc::now().timestamp();
+        let drift = (sys_epoch - rtc_epoch).abs();
+        if drift > 5 {
+          log::warn!("RTC: clock drift {drift}s vs system time — consider syncing with hwclock -w");
+        } else {
+          log::info!("RTC: clock in sync with system (drift {drift}s)");
+        }
+      }
+    },
+    Err(_) => log::info!("RTC: could not read epoch (non-fatal)"),
+  }
+
+  // Check /boot/config.txt for dtoverlay
+  for boot_path in ["/boot/config.txt", "/boot/firmware/config.txt"] {
+    if let Ok(contents) = fs::read_to_string(boot_path) {
+      if contents.contains("dtoverlay=i2c-rtc,ds3231") {
+        log::info!("RTC: dtoverlay=i2c-rtc,ds3231 found in {boot_path}");
+      } else {
+        log::warn!("RTC: dtoverlay=i2c-rtc,ds3231 NOT found in {boot_path} — add it for rtcwake support");
+      }
+      break;
+    }
+  }
+
+  // Note about INT pin (can't detect programmatically)
+  log::info!("RTC: for auto-wake, DS3231 INT/SQW pin must be wired to GPIO3 (pin 5)");
+}
+
+/// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
+///
+/// Returns `true` if rtcwake initiated a poweroff (caller should break the
+/// loop). Returns `false` if rtcwake is unavailable — caller should fall back
+/// to sleep.
+fn try_rtcwake_shutdown(sleep_secs: u64) -> bool {
+  log_rtc_diagnostics();
+
+  if !std::path::Path::new("/dev/rtc0").exists() {
+    log::warn!("shutdown_after_cycle: /dev/rtc0 not available, falling back to sleep");
+    return false;
+  }
+
+  let wake_epoch = Utc::now().timestamp() as u64 + sleep_secs;
+  let wake_local =
+    chrono::DateTime::from_timestamp(wake_epoch as i64, 0).map(|dt| {
+                                                            dt.with_timezone(&Local)
+                                                              .format("%Y-%m-%d %H:%M:%S")
+                                                              .to_string()
+                                                          })
+                                                          .unwrap_or_else(|| {
+                                                            wake_epoch.to_string()
+                                                          });
+  log::info!("shutdown_after_cycle: scheduling wake at {wake_local} (epoch {wake_epoch}, in {sleep_secs}s)");
+
+  let rtcwake = Command::new("sudo").args(["rtcwake", "-m", "off", "-t", &wake_epoch.to_string()])
+                                    .output();
+
+  match rtcwake {
+    Ok(output) if output.status.success() => {
+      // rtcwake will power off the machine — we typically won't reach here
+      log::info!("rtcwake initiated poweroff");
+      true
+    },
+    Ok(output) => {
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      log::warn!("rtcwake exited with {}: {}", output.status, stderr.trim());
+      log::warn!("falling back to sleep — check RTC setup (see scripts/check-rtc-readiness.sh)");
+      false
+    },
+    Err(e) => {
+      log::warn!("rtcwake not found or failed to execute: {e}");
+      log::warn!("falling back to sleep — install util-linux or check PATH");
+      false
+    },
+  }
 }
 
 /// Run one full cycle: fetch stats → render image → display (or save PNG).
