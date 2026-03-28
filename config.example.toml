@@ -24,7 +24,7 @@ quiet_end_hour = 6
 
 # Show the TOTALS summary row (activity count, distance, time, elevation, kudos).
 # Set to false to hide it and give more space to other sections. Default: true.
-show_totals = true
+show_totals = false
 
 # Show the LONGEST / FASTEST section (longest activities per sport + best race paces).
 # Set to false to hide it and give more space to other sections. Default: true.
@@ -37,7 +37,7 @@ show_longest_fastest = true
 shutdown_after_cycle = false
 
 # Polyline thickness in pixels for the last activity route. Default: 3.
-polyline_thickness = 3
+polyline_thickness = 4
 
 # Yearly distance goals (km). Used for progress bars on the dashboard.
 # Define 1–3 goals. Order matters: first sport is a full-width bar on the top

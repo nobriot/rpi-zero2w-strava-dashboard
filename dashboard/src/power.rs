@@ -1,35 +1,6 @@
 use chrono::Utc;
 use std::process::Command;
 
-/// Disable HDMI output to save power (~20-30mA). The e-paper display
-/// does not use HDMI, so this is always safe.
-pub fn disable_hdmi() {
-  match Command::new("tvservice").arg("-o").output() {
-    Ok(output) if output.status.success() => log::info!("HDMI disabled"),
-    Ok(output) => {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      log::info!("tvservice -o: {}", stderr.trim());
-    },
-    Err(_) => log::info!("tvservice not available (non-fatal)"),
-  }
-}
-
-/// Enter low-power mode: disable WiFi radio to save ~30-40mA during sleep.
-#[expect(dead_code,
-         reason = "kept for future use when WiFi sleep is re-enabled")]
-pub fn enter_low_power() {
-  log::info!("Entering low-power sleep (disabling WiFi)");
-  let _ = Command::new("sudo").args(["rfkill", "block", "wifi"]).output();
-}
-
-/// Exit low-power mode: re-enable WiFi and wait for reconnection.
-pub fn exit_low_power() {
-  log::info!("Exiting low-power sleep (re-enabling WiFi)");
-  let _ = Command::new("sudo").args(["rfkill", "unblock", "wifi"]).output();
-  // Give WiFi time to reassociate and get an IP
-  std::thread::sleep(std::time::Duration::from_secs(10));
-}
-
 /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
 ///
 /// Requires the DS3231 INT/SQW pin to be wired to GPIO3 (pin 5) — the Pi's

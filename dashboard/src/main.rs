@@ -71,9 +71,6 @@ fn run() -> Result<()> {
                    }.map_err(errors::DashError::Config)?;
   log::info!("Config loaded successfully");
 
-  // Always disable HDMI — the e-paper display doesn't use it
-  power::disable_hdmi();
-
   let sleep_secs = config.display.sleep_interval_secs;
   let low_power = config.display.shutdown_after_cycle;
 
@@ -126,15 +123,9 @@ fn run() -> Result<()> {
       if power::try_rtcwake_shutdown(sleep_duration) {
         break;
       }
-      // Fall back to low-power sleep: disable WiFi radio during idle
-      // power::enter_low_power();
     }
 
     std::thread::sleep(std::time::Duration::from_secs(sleep_duration));
-
-    if low_power {
-      power::exit_low_power();
-    }
   }
 
   Ok(())
