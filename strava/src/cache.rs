@@ -14,7 +14,7 @@ struct CacheEntry<T> {
   max_age:    u64,
 }
 
-/// File-based JSON cache stored in ~/.cache/rpi-zero2w-strava-dash/
+/// File-based JSON cache stored in ~/.cache/rpi-zero2w-strava-dashboard/
 pub struct Cache {
   dir:             PathBuf,
   default_max_age: u64,
@@ -22,8 +22,8 @@ pub struct Cache {
 
 impl Cache {
   pub fn new() -> Self {
-    let dir = dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".cache"))
-                               .join("rpi-zero2w-strava-dash");
+    let dir =
+      dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".cache")).join(env!("CARGO_PKG_NAME"));
 
     Self { dir,
            default_max_age: DEFAULT_MAX_AGE_SECS }

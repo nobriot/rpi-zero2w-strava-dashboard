@@ -90,7 +90,7 @@ cargo install cross
 cross build --release --target aarch64-unknown-linux-gnu
 
 # Copy binaries to RPi
-scp target/aarch64-unknown-linux-gnu/release/rpi-zero2w-strava-dash pi@<host>:/usr/local/bin/
+scp target/aarch64-unknown-linux-gnu/release/rpi-zero2w-strava-dashboard pi@<host>:/usr/local/bin/
 
 # Copy systemd services
 scp install/strava-dashboard.service pi@<host>:/etc/systemd/system/
@@ -136,7 +136,7 @@ Cargo workspace with 3 crates:
 ## Configuration
 
 See the `config.example.toml` for available keys.
-Config file (default): `~/.config/rpi-zero2w-strava-dash/config.toml`
+Config file (default): `~/.config/rpi-zero2w-strava-dashboard/config.toml`
 
 ---
 

@@ -1,11 +1,11 @@
 [package]
-name = "rpi-zero2w-strava-dash"
+name = "rpi-zero2w-strava-dashboard"
 version = "0.1.0"
 edition = "2024"
 authors = ["Nicolas Woltmann <github@nico-ow.mozmail.com>"]
 description = "Strava dashboard for Waveshare PhotoPainter e-paper display with RPi Zero 2W"
 license = "MIT"
-repository = "https://github.com/nobriot/rpi-zero2w-strava-dash"
+repository = "https://github.com/nobriot/rpi-zero2w-strava-dashboard"
 
 [[bin]]
 name = "strava-dashboard"

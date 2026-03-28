@@ -136,17 +136,17 @@ impl DisplayConfig {
 }
 
 impl Config {
-  /// Default config directory: ~/.config/rpi-zero2w-strava-dash/
+  /// Default config directory: ~/.config/rpi-zero2w-strava-dashboard/
   fn config_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_else(|| PathBuf::from(".config"))
-                      .join("rpi-zero2w-strava-dash")
+                      .join(env!("CARGO_PKG_NAME"))
   }
 
   fn config_path() -> PathBuf {
     Self::config_dir().join("config.toml")
   }
 
-  /// Load config from ~/.config/rpi-zero2w-strava-dash/config.toml
+  /// Load config from ~/.config/rpi-zero2w-strava-dashboard/config.toml
   /// Creates a template file and returns an error if it doesn't exist yet.
   pub fn load() -> Result<Self, String> {
     let path = Self::config_path();
@@ -210,6 +210,23 @@ impl Config {
     self.strava.refresh_token = token;
   }
 
+  pub fn set_client_id(&mut self, id: String) {
+    self.strava.client_id = id;
+  }
+
+  pub fn set_client_secret(&mut self, secret: String) {
+    self.strava.client_secret = secret;
+  }
+
+  /// Returns true if client_id and client_secret are filled in with real
+  /// values.
+  pub fn has_credentials(&self) -> bool {
+    !self.strava.client_id.is_empty()
+    && self.strava.client_id != "YOUR_CLIENT_ID"
+    && !self.strava.client_secret.is_empty()
+    && self.strava.client_secret != "YOUR_CLIENT_SECRET"
+  }
+
   /// Save the current config back to disk.
   pub fn save(&self) -> Result<(), String> {
     let toml_string =
@@ -226,20 +243,23 @@ impl Config {
     Ok(())
   }
 
-  /// Load config allowing a placeholder refresh_token (for use with --auth).
-  /// Still requires valid client_id and client_secret.
+  /// Load config for the auth flow. Returns the config even if credentials
+  /// are missing/placeholder — the caller can prompt interactively.
   pub fn load_for_auth() -> Result<Self, String> {
     let path = Self::config_path();
 
     if !path.exists() {
-      // Delegate to load() which creates the template
-      return Self::load();
+      // No config file yet — return defaults so the interactive setup can fill it in
+      log::info!("No config file found, using defaults for interactive setup");
+      return Ok(Self { strava:  StravaConfig::default(),
+                       display: DisplayConfig::default(), });
     }
 
     Self::load_from_for_auth(&path)
   }
 
-  /// Load config for auth from an explicit file path.
+  /// Load config for auth from an explicit file path. Does not reject
+  /// placeholder credentials — the caller handles that interactively.
   pub fn load_from_for_auth(path: &Path) -> Result<Self, String> {
     let contents = fs::read_to_string(path).map_err(|e| {
                                              format!("Failed to read config file {}: {e}",
@@ -250,14 +270,6 @@ impl Config {
                                                     format!("Failed to parse config file {}: {e}",
                                                             path.display())
                                                   })?;
-
-    if config.strava.client_id == "YOUR_CLIENT_ID"
-       || config.strava.client_secret == "YOUR_CLIENT_SECRET"
-       || config.strava.client_id.is_empty()
-    {
-      return Err(format!("Please fill in your client_id and client_secret in: {}",
-                         path.display()));
-    }
 
     log::info!("Loaded config (for auth) from {}", path.display());
     Ok(config)

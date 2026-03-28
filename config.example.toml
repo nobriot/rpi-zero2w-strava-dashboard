@@ -1,6 +1,6 @@
 # Strava Dashboard — Example Configuration
 #
-# Copy this file to ~/.config/rpi-zero2w-strava-dash/config.toml
+# Copy this file to ~/.config/rpi-zero2w-strava-dashboard/config.toml
 # and fill in your Strava API credentials.
 #
 # Create a Strava API app at https://www.strava.com/settings/api

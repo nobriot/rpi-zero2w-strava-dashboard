@@ -138,9 +138,9 @@ deploy host:
 
 # Deploy a config file as default config on RPi (e.g. just deploy-config pi@rpi tests/nicolas.toml)
 deploy-config host config:
-    ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dash'
-    scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dash/config.toml
-    @echo "Config deployed to {{host}}:~/.config/rpi-zero2w-strava-dash/config.toml"
+    ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'
+    scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml
+    @echo "Config deployed to {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml"
 
 # Generate a NetworkManager .nmconnection file for WiFi (e.g. just wifi MySSID MyPassword)
 wifi ssid password:

@@ -33,20 +33,55 @@ fn main() {
   }
 }
 
-/// Run the OAuth authorization flow explicitly, then save the refresh token.
+/// Run the interactive setup + OAuth authorization flow.
+///
+/// If client_id / client_secret are missing or still placeholders, prompts the
+/// user to enter them. Then runs the browser-based OAuth flow to obtain a
+/// refresh token. Saves the resulting config (with all defaults) to disk.
 fn run_auth(config_path: Option<&PathBuf>) -> Result<()> {
   let mut config = match config_path {
                      Some(path) => strava::config::Config::load_from_for_auth(path),
                      None => strava::config::Config::load_for_auth(),
                    }.map_err(errors::DashError::Config)?;
 
+  if !config.has_credentials() {
+    eprintln!("Strava Dashboard — First-time setup");
+    eprintln!("====================================");
+    eprintln!();
+    eprintln!("Create a Strava API application at: https://www.strava.com/settings/api");
+    eprintln!("Set the \"Authorization Callback Domain\" to: localhost");
+    eprintln!();
+
+    let client_id = prompt("Client ID: ")?;
+    let client_secret = prompt("Client Secret: ")?;
+
+    config.set_client_id(client_id);
+    config.set_client_secret(client_secret);
+  }
+
   let token_response = strava::oauth::run_auth_flow(&config).map_err(errors::DashError::Strava)?;
 
   config.set_refresh_token(token_response.refresh_token);
   config.save().map_err(errors::DashError::Config)?;
 
-  eprintln!("Authorization successful! Refresh token saved to config.");
+  eprintln!();
+  eprintln!("Authorization successful! Config saved.");
   Ok(())
+}
+
+/// Read a line from stdin with a prompt, trimming whitespace.
+fn prompt(label: &str) -> Result<String> {
+  use std::io::Write;
+  eprint!("{label}");
+  std::io::stderr().flush().ok();
+  let mut buf = String::new();
+  std::io::stdin().read_line(&mut buf)
+                  .map_err(|e| DashError::Config(format!("Failed to read input: {e}")))?;
+  let value = buf.trim().to_string();
+  if value.is_empty() {
+    return Err(DashError::Config("Input cannot be empty".to_string()));
+  }
+  Ok(value)
 }
 
 fn run() -> Result<()> {
