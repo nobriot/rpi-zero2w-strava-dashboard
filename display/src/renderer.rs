@@ -711,7 +711,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
     } else {
       let line1 = format!("{}  —  —", rb.label);
       draw_text_mut(img,
-                    LIGHT_GRAY,
+                    BLACK,
                     right_x + s.u(ICON_SZ) as i32 + s.i(12),
                     right_y + s.i(2),
                     detail_sz,
@@ -910,7 +910,7 @@ fn draw_polyline(img: &mut RgbImage,
       let off = i as f32 - half;
       let ox = nx * off;
       let oy = ny * off;
-      draw_line_segment_mut(img, (x0 + ox, y0 + oy), (x1 + ox, y1 + oy), ORANGE);
+      draw_line_segment_mut(img, (x0 + ox, y0 + oy), (x1 + ox, y1 + oy), RED);
     }
   }
 
