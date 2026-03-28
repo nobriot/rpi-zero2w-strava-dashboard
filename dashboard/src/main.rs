@@ -71,7 +71,11 @@ fn run() -> Result<()> {
                    }.map_err(errors::DashError::Config)?;
   log::info!("Config loaded successfully");
 
+  // Always disable HDMI — the e-paper display doesn't use it
+  disable_hdmi();
+
   let sleep_secs = config.display.sleep_interval_secs;
+  let low_power = config.display.shutdown_after_cycle;
 
   loop {
     match try_cycle(&config, &args) {
@@ -117,120 +121,85 @@ fn run() -> Result<()> {
       sleep_secs
     };
 
-    if config.display.shutdown_after_cycle && try_rtcwake_shutdown(sleep_duration) {
-      // rtcwake initiated poweroff — systemd will restart us on next boot
-      break;
+    if low_power {
+      // Try rtcwake poweroff first (requires DS3231 INT wired to GPIO3)
+      if try_rtcwake_shutdown(sleep_duration) {
+        break;
+      }
+      // Fall back to low-power sleep: disable WiFi radio during idle
+      // enter_low_power();
     }
-    // If shutdown_after_cycle is set but rtcwake failed, fall through to normal
-    // sleep
 
     std::thread::sleep(std::time::Duration::from_secs(sleep_duration));
+
+    if low_power {
+      exit_low_power();
+    }
   }
 
   Ok(())
 }
 
-/// Log diagnostic info about RTC readiness for shutdown_after_cycle.
-fn log_rtc_diagnostics() {
-  use std::fs;
-  use std::path::Path;
-
-  // Check /dev/rtc0
-  let rtc_exists = Path::new("/dev/rtc0").exists();
-  if rtc_exists {
-    log::info!("RTC: /dev/rtc0 exists");
-  } else {
-    log::warn!("RTC: /dev/rtc0 not found — is dtoverlay=i2c-rtc,ds3231 in /boot/config.txt?");
-  }
-
-  // Check RTC chip identity
-  match fs::read_to_string("/sys/class/rtc/rtc0/name") {
-    Ok(name) => {
-      let name = name.trim();
-      if name.contains("ds3231") {
-        log::info!("RTC: chip identified as {name}");
-      } else {
-        log::warn!("RTC: chip is {name} (expected ds3231)");
-      }
+/// Disable HDMI output to save power (~20-30mA). The e-paper display
+/// does not use HDMI, so this is always safe.
+fn disable_hdmi() {
+  match Command::new("tvservice").arg("-o").output() {
+    Ok(output) if output.status.success() => log::info!("HDMI disabled"),
+    Ok(output) => {
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      log::info!("tvservice -o: {}", stderr.trim());
     },
-    Err(_) => log::warn!("RTC: could not read /sys/class/rtc/rtc0/name"),
+    Err(_) => log::info!("tvservice not available (non-fatal)"),
   }
+}
 
-  // Check RTC time vs system time
-  match fs::read_to_string("/sys/class/rtc/rtc0/since_epoch") {
-    Ok(epoch_str) => {
-      if let Ok(rtc_epoch) = epoch_str.trim().parse::<i64>() {
-        let sys_epoch = Utc::now().timestamp();
-        let drift = (sys_epoch - rtc_epoch).abs();
-        if drift > 5 {
-          log::warn!("RTC: clock drift {drift}s vs system time — consider syncing with hwclock -w");
-        } else {
-          log::info!("RTC: clock in sync with system (drift {drift}s)");
-        }
-      }
-    },
-    Err(_) => log::info!("RTC: could not read epoch (non-fatal)"),
-  }
+// /// Enter low-power mode: disable WiFi radio to save ~30-40mA during sleep.
+// fn enter_low_power() {
+//   log::info!("Entering low-power sleep (disabling WiFi)");
+//   let _ = Command::new("sudo").args(["rfkill", "block", "wifi"]).output();
+// }
 
-  // Check /boot/config.txt for dtoverlay
-  for boot_path in ["/boot/config.txt", "/boot/firmware/config.txt"] {
-    if let Ok(contents) = fs::read_to_string(boot_path) {
-      if contents.contains("dtoverlay=i2c-rtc,ds3231") {
-        log::info!("RTC: dtoverlay=i2c-rtc,ds3231 found in {boot_path}");
-      } else {
-        log::warn!("RTC: dtoverlay=i2c-rtc,ds3231 NOT found in {boot_path} — add it for rtcwake support");
-      }
-      break;
-    }
-  }
-
-  // Note about INT pin (can't detect programmatically)
-  log::info!("RTC: for auto-wake, DS3231 INT/SQW pin must be wired to GPIO3 (pin 5)");
+/// Exit low-power mode: re-enable WiFi and wait for reconnection.
+fn exit_low_power() {
+  log::info!("Exiting low-power sleep (re-enabling WiFi)");
+  let _ = Command::new("sudo").args(["rfkill", "unblock", "wifi"]).output();
+  // Give WiFi time to reassociate and get an IP
+  std::thread::sleep(std::time::Duration::from_secs(10));
 }
 
 /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
 ///
+/// Requires the DS3231 INT/SQW pin to be wired to GPIO3 (pin 5) — the Pi's
+/// only wake-from-poweroff pin. On the Waveshare PhotoPainter board this
+/// connection does not exist by default.
+///
 /// Returns `true` if rtcwake initiated a poweroff (caller should break the
-/// loop). Returns `false` if rtcwake is unavailable — caller should fall back
-/// to sleep.
+/// loop). Returns `false` if unavailable — caller should fall back to
+/// low-power sleep.
 fn try_rtcwake_shutdown(sleep_secs: u64) -> bool {
-  log_rtc_diagnostics();
-
   if !std::path::Path::new("/dev/rtc0").exists() {
-    log::warn!("shutdown_after_cycle: /dev/rtc0 not available, falling back to sleep");
+    log::info!("rtcwake: /dev/rtc0 not available, using low-power sleep");
     return false;
   }
 
   let wake_epoch = Utc::now().timestamp() as u64 + sleep_secs;
-  let wake_local =
-    chrono::DateTime::from_timestamp(wake_epoch as i64, 0).map(|dt| {
-                                                            dt.with_timezone(&Local)
-                                                              .format("%Y-%m-%d %H:%M:%S")
-                                                              .to_string()
-                                                          })
-                                                          .unwrap_or_else(|| {
-                                                            wake_epoch.to_string()
-                                                          });
-  log::info!("shutdown_after_cycle: scheduling wake at {wake_local} (epoch {wake_epoch}, in {sleep_secs}s)");
+  log::info!("rtcwake: attempting poweroff with wake at epoch {wake_epoch} (in {sleep_secs}s)");
 
   let rtcwake = Command::new("sudo").args(["rtcwake", "-m", "off", "-t", &wake_epoch.to_string()])
                                     .output();
 
   match rtcwake {
     Ok(output) if output.status.success() => {
-      // rtcwake will power off the machine — we typically won't reach here
       log::info!("rtcwake initiated poweroff");
       true
     },
     Ok(output) => {
       let stderr = String::from_utf8_lossy(&output.stderr);
-      log::warn!("rtcwake exited with {}: {}", output.status, stderr.trim());
-      log::warn!("falling back to sleep — check RTC setup (see scripts/check-rtc-readiness.sh)");
+      log::info!("rtcwake unavailable ({}) — using low-power sleep", stderr.trim());
       false
     },
     Err(e) => {
-      log::warn!("rtcwake not found or failed to execute: {e}");
-      log::warn!("falling back to sleep — install util-linux or check PATH");
+      log::info!("rtcwake not found ({e}) — using low-power sleep");
       false
     },
   }

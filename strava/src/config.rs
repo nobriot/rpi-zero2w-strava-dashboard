@@ -80,9 +80,10 @@ pub struct DisplayConfig {
   #[serde(default = "default_show_longest_fastest")]
   pub show_longest_fastest: bool,
 
-  /// Power off the Pi between refresh cycles to extend battery life.
-  /// Uses `rtcwake` with the DS3231 RTC to schedule the next boot.
-  /// Falls back to plain `shutdown` if `rtcwake` is unavailable.
+  /// Enable low-power mode between refresh cycles to extend battery life.
+  /// Disables HDMI and WiFi during sleep, re-enables WiFi before the next
+  /// cycle. If the DS3231 INT pin is wired to GPIO3, attempts rtcwake
+  /// poweroff first for maximum savings.
   #[serde(default)]
   pub shutdown_after_cycle: bool,
 }

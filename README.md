@@ -13,6 +13,24 @@ with e-paper display.
 
 TODO:Insert a picture
 
+## RTC Notes:
+
+config.txt:
+
+```ini
+dtoverlay=i2c-rtc,ds3231,wakeup-source
+dtparam=i2c_arm=on
+```
+
+Sync time: 
+
+```bash
+sudo hwclock -w --utc
+```
+
+TPL5110 timer ? 
+Seems like a good possibility.
+
 ## TODOs
 
 Witty Pi 4 Mini ?

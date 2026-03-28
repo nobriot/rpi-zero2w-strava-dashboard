@@ -18,9 +18,9 @@ refresh_token = "YOUR_REFRESH_TOKEN"
 sleep_interval_secs = 10800
 
 # Quiet hours — no refresh between these hours (0–23, local time).
-# Default: 20:00–08:00
+# Default: 20:00–06:00
 quiet_start_hour = 20
-quiet_end_hour = 8
+quiet_end_hour = 6
 
 # Show the TOTALS summary row (activity count, distance, time, elevation, kudos).
 # Set to false to hide it and give more space to other sections. Default: true.
@@ -30,10 +30,9 @@ show_totals = true
 # Set to false to hide it and give more space to other sections. Default: true.
 show_longest_fastest = true
 
-# Power off the Pi between refresh cycles to extend battery life.
-# Uses rtcwake with the DS3231 RTC to schedule the next boot.
-# Requires: dtoverlay=i2c-rtc,ds3231 in /boot/config.txt
-# Falls back to plain shutdown if rtcwake is unavailable.
+# Low-power mode: disable HDMI and WiFi between refresh cycles to extend
+# battery life (~50% power reduction). WiFi is re-enabled before each cycle.
+# If the DS3231 INT pin is wired to GPIO3, also attempts rtcwake poweroff.
 # Default: false
 shutdown_after_cycle = false
 
