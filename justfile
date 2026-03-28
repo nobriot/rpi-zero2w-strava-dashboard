@@ -13,10 +13,11 @@ dev:
 
     # --- rustup & cargo ---
     if ! command -v rustup &>/dev/null; then
-        echo -e "$err rustup not found — install from https://rustup.rs"
-        exit 1
+        echo -e "$err rustup not found — installing Rust"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    else
+        echo -e "$ok rustup $(rustup --version 2>/dev/null | head -1 | awk '{print $2}')"
     fi
-    echo -e "$ok rustup $(rustup --version 2>/dev/null | head -1 | awk '{print $2}')"
 
     if ! command -v cargo &>/dev/null; then
         echo -e "$err cargo not found"
@@ -93,6 +94,10 @@ dev:
 # Run all workspace tests (unit + snapshot)
 test:
     RUST_MIN_STACK=16777216 cargo test --workspace
+
+# Run the dashboard with the auth option
+auth:
+    cargo run -- --auth
 
 # Run only unit tests (strava crate)
 test-unit:

@@ -34,10 +34,9 @@ Seems like a good possibility.
 ## TODOs
 
 Witty Pi 4 Mini ?
+Seems overkill
 https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
 
-just add-wifi : create a nmconnection file
-just deploy-config: send a config file to the target
 
 ## What It Does
 

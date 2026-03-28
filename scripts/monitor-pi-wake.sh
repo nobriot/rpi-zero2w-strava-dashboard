@@ -35,8 +35,8 @@ while true; do
 
   # Try to get uptime from the Pi (fast SSH check, or fall back to ping)
   uptime_info=""
-  if ssh -o ConnectTimeout=3 -o BatchMode=yes "$PI_HOST" "uptime -s" 2>/dev/null; then
-    uptime_info=$(ssh -o ConnectTimeout=3 -o BatchMode=yes "$PI_HOST" "uptime -s" 2>/dev/null || true)
+  if ssh -o ConnectTimeout=5 -o BatchMode=yes "$PI_HOST" "uptime -s" 2>/dev/null; then
+    uptime_info=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$PI_HOST" "uptime -s" 2>/dev/null || true)
     new_state="awake"
   elif ping -c 1 -W 2 "$PI_HOST" &>/dev/null; then
     new_state="awake"
@@ -75,7 +75,5 @@ while true; do
 
   # Log to CSV
   echo "$ts,$new_state,$transition,$uptime_info" >> "$LOGFILE"
-
-  # Periodic status line (every 10th check)
   sleep "$INTERVAL"
 done
