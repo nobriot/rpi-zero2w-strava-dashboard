@@ -86,7 +86,7 @@ impl Default for DisplayConfig {
                                                    km:    500.0, },
                                       GoalConfig { sport: SportType::Swim,
                                                    km:    20.0, },],
-           polyline_thickness:   3,
+           polyline_thickness:   4,
            show_totals:          true,
            show_longest_fastest: true, }
   }
@@ -689,7 +689,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
     if let (Some(pace), Some(dist), Some(time)) =
       (&rb.pace, rb.distance_km, &rb.moving_time_display)
     {
-      let line1 = format!("{}  —  {}  ·  {:.1}km  ·  {}", rb.label, pace, dist, time);
+      let line1 = format!("{}  -  {}  ·  {}  ·  ({:.1}km)", rb.label, pace, time, dist);
       draw_text_mut(img,
                     BLACK,
                     right_x + s.u(ICON_SZ) as i32 + s.i(12),
@@ -709,7 +709,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               font_emoji,
                               &line2);
     } else {
-      let line1 = format!("{}  —  —", rb.label);
+      let line1 = format!("{}  —", rb.label);
       draw_text_mut(img,
                     BLACK,
                     right_x + s.u(ICON_SZ) as i32 + s.i(12),

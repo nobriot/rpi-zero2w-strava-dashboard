@@ -2,5 +2,6 @@
 /tmp
 /rpi-assets
 /tests
+/book/book
 *.png
 !display/assets/*.png

@@ -98,7 +98,7 @@ fn default_quiet_end() -> u32 {
   8
 }
 fn default_polyline_thickness() -> u32 {
-  3
+  4
 }
 fn default_show_totals() -> bool {
   true

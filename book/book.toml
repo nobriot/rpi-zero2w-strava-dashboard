@@ -1,0 +1,8 @@
+[book]
+authors = ["Nicolas Woltmann"]
+language = "en"
+src = "src"
+title = "Strava E-Paper Dashboard"
+
+[output.html]
+git-repository-url = "https://github.com/nwoltman/rpi-zero2w-strava-dash"

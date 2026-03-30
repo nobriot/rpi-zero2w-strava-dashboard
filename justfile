@@ -2,6 +2,11 @@
 default:
     @just --list
 
+# Clean all build artifacts (Rust + mdBook)
+clean:
+    cargo clean
+    rm -rf book/book
+
 # Set up the development environment
 dev:
     #!/usr/bin/env bash
@@ -61,6 +66,13 @@ dev:
         cargo install cross
     fi
     echo -e "$ok cross $(cross --version 2>/dev/null | head -1 | awk '{print $2}')"
+
+    # --- mdbook ---
+    if ! command -v mdbook &>/dev/null; then
+        echo -e "$info Installing mdbook..."
+        cargo install mdbook
+    fi
+    echo -e "$ok mdbook $(mdbook --version 2>/dev/null | awk '{print $2}')"
 
     # --- aarch64 target (for cross-compilation) ---
     if ! rustup target list --installed | grep -q 'aarch64-unknown-linux-gnu'; then
@@ -141,6 +153,14 @@ deploy-config host config:
     ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'
     scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml
     @echo "Config deployed to {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml"
+
+# Build the mdBook documentation
+book:
+    mdbook build book
+
+# Serve the mdBook locally with live-reload (http://localhost:3000)
+book-serve:
+    mdbook serve book --open
 
 # Generate a NetworkManager .nmconnection file for WiFi (e.g. just wifi MySSID MyPassword)
 wifi ssid password:
