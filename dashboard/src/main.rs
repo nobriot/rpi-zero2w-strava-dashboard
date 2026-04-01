@@ -1,14 +1,15 @@
 use clap::builder::styling;
 use clap::{CommandFactory, FromArgMatches};
 
-mod errors;
-use errors::Result;
-
 mod args;
+mod config;
+mod errors;
 mod power;
-use crate::errors::DashError;
+
 use args::Args;
 use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
+use config::Config;
+use errors::{DashError, Result};
 use std::path::PathBuf;
 
 const STYLES: styling::Styles =
@@ -40,11 +41,11 @@ fn main() {
 /// refresh token. Saves the resulting config (with all defaults) to disk.
 fn run_auth(config_path: Option<&PathBuf>) -> Result<()> {
   let mut config = match config_path {
-                     Some(path) => strava::config::Config::load_from_for_auth(path),
-                     None => strava::config::Config::load_for_auth(),
-                   }.map_err(errors::DashError::Config)?;
+                     Some(path) => Config::load_from_for_auth(path),
+                     None => Config::load_for_auth(),
+                   }.map_err(DashError::Config)?;
 
-  if !config.has_credentials() {
+  if !config.strava.has_credentials() {
     eprintln!("Strava Dashboard — First-time setup");
     eprintln!("====================================");
     eprintln!();
@@ -55,14 +56,14 @@ fn run_auth(config_path: Option<&PathBuf>) -> Result<()> {
     let client_id = prompt("Client ID: ")?;
     let client_secret = prompt("Client Secret: ")?;
 
-    config.set_client_id(client_id);
-    config.set_client_secret(client_secret);
+    config.strava.set_client_id(client_id);
+    config.strava.set_client_secret(client_secret);
   }
 
-  let token_response = strava::oauth::run_auth_flow(&config).map_err(errors::DashError::Strava)?;
+  let token_response = strava::oauth::run_auth_flow(&config.strava).map_err(DashError::Strava)?;
 
-  config.set_refresh_token(token_response.refresh_token);
-  config.save().map_err(errors::DashError::Config)?;
+  config.strava.set_refresh_token(token_response.refresh_token);
+  config.save().map_err(DashError::Config)?;
 
   eprintln!();
   eprintln!("Authorization successful! Config saved.");
@@ -95,19 +96,19 @@ fn run() -> Result<()> {
   }
 
   if args.clear_cache {
-    strava::cache::Cache::new().clear().map_err(errors::DashError::Config)?;
+    strava::cache::Cache::new().clear().map_err(DashError::Config)?;
     eprintln!("Cache cleared.");
   }
 
   // Load config
   let mut config = match args.config.as_ref() {
-                     Some(path) => strava::config::Config::load_from(path),
-                     None => strava::config::Config::load(),
-                   }.map_err(errors::DashError::Config)?;
+                     Some(path) => Config::load_from(path),
+                     None => Config::load(),
+                   }.map_err(DashError::Config)?;
   log::info!("Config loaded successfully");
 
   loop {
-    match try_cycle(&config, &args) {
+    match try_cycle(&mut config, &args) {
       Ok(()) => {},
       Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
         // Token refresh already attempted by the client.
@@ -115,17 +116,15 @@ fn run() -> Result<()> {
         log::warn!("Unauthorized after auto-refresh — attempting full OAuth re-authorization");
         eprintln!("\nRefresh token invalid. Starting OAuth authorization flow...");
 
-        let token_response = strava::oauth::run_auth_flow(&config)?;
-        config.set_refresh_token(token_response.refresh_token);
-        config.save().map_err(errors::DashError::Config)?;
+        let token_response = strava::oauth::run_auth_flow(&config.strava)?;
+        config.strava.set_refresh_token(token_response.refresh_token);
+        config.save().map_err(DashError::Config)?;
 
-        if let Err(e) = try_cycle(&config, &args) {
+        if let Err(e) = try_cycle(&mut config, &args) {
           eprintln!("Error after re-authorization: {e:?}");
         }
       },
       Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
-        // fetch_stats already falls back to cached data, so this is unlikely
-        // to be reached. Log and retry next cycle.
         log::warn!("Network unavailable: {msg}");
         eprintln!("Network unavailable — will retry next cycle");
       },
@@ -201,8 +200,8 @@ fn run() -> Result<()> {
   Ok(())
 }
 
-/// Run one full cycle: fetch stats → render image → display (or save PNG).
-fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
+/// Run one full cycle: fetch stats -> render image -> display (or save PNG).
+fn try_cycle(config: &mut Config, args: &Args) -> Result<()> {
   let (stats, avatar, is_offline) = fetch_stats(config, args.show_all_sports)?;
 
   // Read battery status (non-fatal if unavailable)
@@ -222,11 +221,8 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 
   // Render
   let polyline_thickness = args.polyline_thickness.unwrap_or(config.display.polyline_thickness);
-  let display_config =
-    display::renderer::DisplayConfig { goals: config.display.goals.clone(),
-                                       polyline_thickness,
-                                       show_totals: config.display.show_totals,
-                                       show_longest_fastest: config.display.show_longest_fastest };
+  let display_config = display::config::DisplayConfig { polyline_thickness,
+                                                        ..config.display.clone() };
   let scale = display::renderer::Scale::new(args.scale);
   let img = display::renderer::render_dashboard(&stats,
                                                 battery.as_ref(),
@@ -279,9 +275,9 @@ fn try_cycle(config: &strava::config::Config, args: &Args) -> Result<()> {
 /// Fetch Strava data and compute dashboard stats. Also fetches/caches the
 /// avatar. Falls back to cached (possibly stale) data when the network is
 /// unavailable.
-fn fetch_stats(config: &strava::config::Config,
+fn fetch_stats(config: &mut Config,
                show_all_sports: bool)
-               -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>, bool)> {
+               -> Result<(common::DashboardStats, Option<Vec<u8>>, bool)> {
   match fetch_stats_online(config, show_all_sports) {
     Ok((stats, avatar)) => Ok((stats, avatar, false)),
     Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
@@ -294,10 +290,10 @@ fn fetch_stats(config: &strava::config::Config,
 }
 
 /// Online path: authenticate, fetch from Strava API, cache results.
-fn fetch_stats_online(config: &strava::config::Config,
+fn fetch_stats_online(config: &mut Config,
                       show_all_sports: bool)
-                      -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
-  let mut client = strava::client::Client::new(config.clone());
+                      -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
+  let mut client = strava::client::Client::new(config.strava.clone());
   client.get_token()?;
 
   log::info!("Getting athlete");
@@ -320,11 +316,19 @@ fn fetch_stats_online(config: &strava::config::Config,
   let activities = client.get_activities(year_start)?;
   log::info!("Fetched {} activities", activities.len());
 
-  let dashboard =
-    strava::stats::DashboardStats::compute(&stats,
-                                           &activities,
-                                           athlete.firstname.as_deref().unwrap_or("Athlete"),
-                                           show_all_sports);
+  // Persist updated refresh token if it changed
+  if client.token_refreshed() {
+    let new_token = client.refresh_token().to_string();
+    config.strava.set_refresh_token(new_token);
+    if let Err(e) = config.save() {
+      log::warn!("Failed to save updated refresh token: {e}");
+    }
+  }
+
+  let dashboard = strava::stats::compute(&stats,
+                                         &activities,
+                                         athlete.firstname.as_deref().unwrap_or("Athlete"),
+                                         show_all_sports);
 
   Ok((dashboard, avatar))
 }
@@ -333,7 +337,7 @@ fn fetch_stats_online(config: &strava::config::Config,
 /// is available. Scans per-athlete subdirectories and picks the most recently
 /// used one.
 fn fetch_stats_from_cache(show_all_sports: bool)
-                          -> Result<(strava::stats::DashboardStats, Option<Vec<u8>>)> {
+                          -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
   let athlete_cache =
@@ -352,14 +356,13 @@ fn fetch_stats_from_cache(show_all_sports: bool)
 
   log::info!("Offline fallback: athlete={}, activities={}", firstname, activities.len(),);
 
-  let dashboard =
-    strava::stats::DashboardStats::compute(&stats, &activities, firstname, show_all_sports);
+  let dashboard = strava::stats::compute(&stats, &activities, firstname, show_all_sports);
 
   Ok((dashboard, avatar))
 }
 
 /// Check whether the current local time falls inside the quiet window.
-fn is_quiet_time(display: &strava::config::DisplayConfig) -> bool {
+fn is_quiet_time(display: &display::config::DisplayConfig) -> bool {
   let hour = Local::now().hour();
   let start = display.quiet_start_hour;
   let end = display.quiet_end_hour;
@@ -374,7 +377,7 @@ fn is_quiet_time(display: &strava::config::DisplayConfig) -> bool {
 }
 
 /// Compute seconds from now until the quiet window ends.
-fn seconds_until_quiet_end(display: &strava::config::DisplayConfig) -> u64 {
+fn seconds_until_quiet_end(display: &display::config::DisplayConfig) -> u64 {
   let now = Local::now();
   let hour = now.hour();
   let end = display.quiet_end_hour;

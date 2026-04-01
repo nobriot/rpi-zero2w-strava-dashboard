@@ -25,3 +25,4 @@
 - [Troubleshooting](./troubleshooting.md)
 - [Hardware Details](./hardware.md)
 - [Command-Line Options](./cli.md)
+- [Useful links](./useful-links.md)

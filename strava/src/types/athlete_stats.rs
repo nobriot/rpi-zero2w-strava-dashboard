@@ -1,3 +1,4 @@
+pub use common::SportType;
 use serde::{Deserialize, Serialize};
 
 /// Athlete statistics from Strava API
@@ -62,15 +63,6 @@ pub struct ActivityTotal {
   /// The number of achievements (not always present)
   #[serde(default)]
   pub achievement_count: Option<u32>,
-}
-
-/// Sport type enum for querying stats
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SportType {
-  Run,
-  Ride,
-  Swim,
 }
 
 /// Time period enum for querying stats

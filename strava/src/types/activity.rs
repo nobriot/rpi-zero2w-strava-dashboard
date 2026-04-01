@@ -1,4 +1,4 @@
-use super::athlete_stats::SportType;
+use common::SportType;
 use serde::{Deserialize, Serialize};
 
 /// Summary activity from Strava API

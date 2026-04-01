@@ -1,13 +1,12 @@
+use crate::config::{DisplayConfig, GoalConfig};
 use crate::icons;
 use crate::ina219::BatteryStatus;
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
+use common::{DashboardStats, SportType};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
 use imageproc::rect::Rect;
-use strava::config::GoalConfig;
-use strava::stats::DashboardStats;
-use strava::types::SportType;
 
 const W: u32 = 800;
 const H: u32 = 480;
@@ -67,28 +66,6 @@ impl Scale {
 
   pub fn factor(&self) -> u32 {
     self.0
-  }
-}
-
-/// Dashboard display configuration.
-pub struct DisplayConfig {
-  pub goals:                Vec<GoalConfig>,
-  pub polyline_thickness:   u32,
-  pub show_totals:          bool,
-  pub show_longest_fastest: bool,
-}
-
-impl Default for DisplayConfig {
-  fn default() -> Self {
-    Self { goals:                vec![GoalConfig { sport: SportType::Ride,
-                                                   km:    5000.0, },
-                                      GoalConfig { sport: SportType::Run,
-                                                   km:    500.0, },
-                                      GoalConfig { sport: SportType::Swim,
-                                                   km:    20.0, },],
-           polyline_thickness:   4,
-           show_totals:          true,
-           show_longest_fastest: true, }
   }
 }
 

@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::StravaConfig;
 use crate::errors::StravaError;
 use crate::types::TokenResponse;
 use reqwest::blocking::Client as ReqwestClient;
@@ -27,7 +27,7 @@ const ERROR_HTML: &str = r#"<!DOCTYPE html>
 /// 2. Open the Strava authorization page in the user's browser
 /// 3. Wait for the redirect callback with the authorization code
 /// 4. Exchange the code for tokens
-pub fn run_auth_flow(config: &Config) -> Result<TokenResponse, StravaError> {
+pub fn run_auth_flow(config: &StravaConfig) -> Result<TokenResponse, StravaError> {
   let listener = TcpListener::bind("127.0.0.1:0")
     .map_err(|e| StravaError::OAuthError(format!("Failed to start local server: {e}")))?;
 
@@ -99,7 +99,7 @@ fn extract_query_param(query: &str, key: &str) -> Option<String> {
 }
 
 /// Exchange the authorization code for an access token and refresh token.
-fn exchange_code_for_tokens(config: &Config,
+fn exchange_code_for_tokens(config: &StravaConfig,
                             code: &str,
                             redirect_uri: &str)
                             -> Result<TokenResponse, StravaError> {

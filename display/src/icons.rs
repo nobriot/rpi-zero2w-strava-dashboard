@@ -106,13 +106,13 @@ pub fn draw_zap(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) 
 pub fn draw_sport_icon(img: &mut RgbImage,
                        x: u32,
                        y: u32,
-                       sport: strava::types::SportType,
+                       sport: common::SportType,
                        color: Rgb<u8>,
                        scale: u32) {
   match sport {
-    strava::types::SportType::Run => draw_runner(img, x, y, color, scale),
-    strava::types::SportType::Ride => draw_cyclist(img, x, y, color, scale),
-    strava::types::SportType::Swim => draw_swimmer(img, x, y, color, scale),
+    common::SportType::Run => draw_runner(img, x, y, color, scale),
+    common::SportType::Ride => draw_cyclist(img, x, y, color, scale),
+    common::SportType::Swim => draw_swimmer(img, x, y, color, scale),
   }
 }
 

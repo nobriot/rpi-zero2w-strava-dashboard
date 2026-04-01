@@ -414,6 +414,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,6 +528,7 @@ version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "chrono",
+ "common",
  "image",
  "imageproc",
  "log",
@@ -2213,13 +2221,16 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
+ "common",
  "dirs",
  "display",
  "env_logger",
  "image",
  "log",
+ "serde",
  "strava",
  "thiserror 2.0.18",
+ "toml",
 ]
 
 [[package]]
@@ -2571,13 +2582,13 @@ name = "strava"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "common",
  "dirs",
  "log",
  "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "toml",
 ]
 
 [[package]]

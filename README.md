@@ -1,4 +1,4 @@
-# WaveShare RPI Zero 2W Strava Dashboard
+# WaveShare e-paper RPI Zero 2W Strava Dashboard
 
 A Strava dashboard for
 [WaveShare Raspberry Pi Zero 2W Photo Painter](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
@@ -6,6 +6,14 @@ with e-paper display.
 
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+Somebody said vide-coding is for toys, not production... So let's build a toy! 🙂
+
+This is the first project where I experimented with copilot / claude a little
+bit to get a feel for what they can do.
+
+Started coding the thing myself and slowly let the coding agent take over, though
+I probably micro-manage them too much.
 
 ---
 

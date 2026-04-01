@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-members = ["dashboard", "strava", "display"]
+members = ["dashboard", "strava", "display", "common"]
 default-members = ["dashboard"]

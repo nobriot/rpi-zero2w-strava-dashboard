@@ -1,14 +1,15 @@
 use crate::cache::Cache;
-use crate::config::Config as StravaConfig;
+use crate::config::StravaConfig;
 use crate::errors::StravaError;
 use crate::types::{AthleteStats, DetailedAthlete, SummaryActivity, TokenResponse};
 use reqwest::blocking::Client as ReqwestClient;
 
 pub struct Client {
-  client:       ReqwestClient,
-  config:       StravaConfig,
-  cache:        Cache,
-  access_token: Option<String>,
+  client:          ReqwestClient,
+  config:          StravaConfig,
+  cache:           Cache,
+  access_token:    Option<String>,
+  token_refreshed: bool,
 }
 
 impl Client {
@@ -21,7 +22,8 @@ impl Client {
     Self { client: ReqwestClient::new(),
            config,
            cache: Cache::new(),
-           access_token: None }
+           access_token: None,
+           token_refreshed: false }
   }
 
   pub fn get_token(&mut self) -> Result<(), StravaError> {
@@ -54,13 +56,11 @@ impl Client {
 
     self.access_token = Some(token_response.access_token);
 
-    // Persist updated refresh token if it changed
+    // Update refresh token in memory if it changed — caller persists
     if token_response.refresh_token != self.config.refresh_token() {
-      log::info!("Refresh token changed, updating config");
+      log::info!("Refresh token changed, updating in-memory config");
       self.config.set_refresh_token(token_response.refresh_token);
-      if let Err(e) = self.config.save() {
-        log::warn!("Failed to save updated refresh token: {e}");
-      }
+      self.token_refreshed = true;
     }
 
     log::info!("Access token obtained");
@@ -220,6 +220,16 @@ impl Client {
                   });
 
     Ok(all_activities)
+  }
+
+  /// Whether the refresh token was updated during this session.
+  pub fn token_refreshed(&self) -> bool {
+    self.token_refreshed
+  }
+
+  /// Current refresh token (possibly updated after authentication).
+  pub fn refresh_token(&self) -> &str {
+    self.config.refresh_token()
   }
 
   /// Classify a reqwest error as NetworkUnavailable when it's a connectivity
