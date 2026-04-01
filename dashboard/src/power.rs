@@ -3,9 +3,9 @@ use std::process::Command;
 
 /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
 ///
-/// Requires the DS3231 INT/SQW pin to be wired to GPIO3 (pin 5) — the Pi's
-/// only wake-from-poweroff pin. On the Waveshare PhotoPainter board this
-/// connection does not exist by default.
+/// Requires the DS3231 INT/SQW pin to be wired to GPIO4, with the
+/// `gpio-shutdown,gpio_pin=4` device-tree overlay enabled so the Pi
+/// wakes from halt on that pin.
 ///
 /// Returns `true` if rtcwake initiated a poweroff (caller should break the
 /// loop). Returns `false` if unavailable — caller should fall back to
@@ -35,6 +35,48 @@ pub fn try_rtcwake_shutdown(sleep_secs: u64) -> bool {
     Err(e) => {
       log::info!("rtcwake not found ({e}) — using low-power sleep");
       false
+    },
+  }
+}
+
+/// Check whether any SSH (pseudo-terminal) sessions are currently active.
+///
+/// Runs `who` and looks for `pts/` entries. Returns `false` on failure
+/// (conservative: don't block shutdown if we can't check).
+pub fn has_ssh_sessions() -> bool {
+  let output = match Command::new("who").output() {
+    Ok(o) => o,
+    Err(e) => {
+      log::debug!("Failed to run `who`: {e}");
+      return false;
+    },
+  };
+
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  let has_sessions = stdout.lines().any(|line| line.contains("pts/"));
+  if has_sessions {
+    log::info!("Active SSH session(s) detected");
+  }
+  has_sessions
+}
+
+/// Read the current battery status from the INA219 UPS monitor.
+///
+/// Returns `None` if the sensor is unavailable (e.g. no UPS board, dev
+/// machine). This is non-fatal — the caller uses `None` to mean "on
+/// external power / no battery".
+pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
+  match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
+    Ok(status) => {
+      log::info!("Battery: {}% ({:.2}V, {})",
+                 status.percentage,
+                 status.voltage,
+                 if status.is_charging { "charging" } else { "discharging" });
+      Some(status)
+    },
+    Err(e) => {
+      log::debug!("Battery monitor unavailable: {e}");
+      None
     },
   }
 }

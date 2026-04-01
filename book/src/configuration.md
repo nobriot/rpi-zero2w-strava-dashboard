@@ -84,18 +84,6 @@ The thickness (in pixels) of the route line drawn on the map for your last
 activity. Default: **4**. Increase for a bolder line, decrease for a thinner
 one.
 
-### Low-power mode
-
-```toml
-shutdown_after_cycle = false
-```
-
-When set to `true`, the Pi disables WiFi and HDMI between refresh cycles to
-extend battery life. WiFi is re-enabled 10 seconds before the next cycle.
-Default: `false`.
-
-This roughly halves power consumption during sleep (from ~120 mA to ~50-60 mA).
-
 ### Sport goals
 
 ```toml
@@ -122,6 +110,51 @@ of the dashboard. Available sports: `"run"`, `"ride"`, `"swim"`.
 
 Adjust the `km` values to match your personal goals for the year.
 
+## Power settings (all optional)
+
+```toml
+[power]
+```
+
+### Shutdown after cycle
+
+```toml
+shutdown_after_cycle = false
+```
+
+When `true`, the Pi powers off between refresh cycles via `rtcwake` and wakes
+up automatically for the next cycle. Requires a DS3231 RTC with INT/SQW wired
+to GPIO4 and the `gpio-shutdown,gpio_pin=4` overlay. Default: `false`.
+
+### Charging interval
+
+```toml
+charging_interval_secs = 1200
+```
+
+Refresh interval (seconds) when the Pi is charging or when no battery sensor
+is detected (e.g. running on a dev machine). Quiet hours are ignored when on
+power. Default: **1200** (20 minutes).
+
+### Linger
+
+```toml
+linger_secs = 120
+```
+
+Seconds to stay awake after each refresh cycle before sleeping or shutting
+down. This gives a window for SSH access. Default: **120** (2 minutes).
+
+### SSH shutdown inhibit
+
+```toml
+ssh_inhibit_below_percent = 30
+```
+
+When SSH sessions are active, don't rtcwake-shutdown unless the battery drops
+below this percentage. Set to `0` to disable SSH detection entirely.
+Default: **30**.
+
 ## Full example
 
 ```toml
@@ -136,7 +169,6 @@ quiet_start_hour = 22
 quiet_end_hour = 7
 show_totals = false
 show_longest_fastest = true
-shutdown_after_cycle = false
 polyline_thickness = 4
 
 [[display.goals]]
@@ -150,6 +182,12 @@ km = 500.0
 [[display.goals]]
 sport = "swim"
 km = 30.0
+
+[power]
+shutdown_after_cycle = false
+charging_interval_secs = 1200
+linger_secs = 120
+ssh_inhibit_below_percent = 30
 ```
 
 ## Applying changes

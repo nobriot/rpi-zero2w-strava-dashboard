@@ -25,6 +25,10 @@ pub struct Config {
   /// Display and dashboard settings (optional section)
   #[serde(default)]
   pub display: DisplayConfig,
+
+  /// Power management settings (optional section)
+  #[serde(default)]
+  pub power: PowerConfig,
 }
 
 /// Strava API credentials.
@@ -79,13 +83,32 @@ pub struct DisplayConfig {
   /// Whether to show the LONGEST / FASTEST section (default: true).
   #[serde(default = "default_show_longest_fastest")]
   pub show_longest_fastest: bool,
+}
 
-  /// Enable low-power mode between refresh cycles to extend battery life.
-  /// Disables HDMI and WiFi during sleep, re-enables WiFi before the next
-  /// cycle. If the DS3231 INT pin is wired to GPIO3, attempts rtcwake
-  /// poweroff first for maximum savings.
+/// Power management configuration.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PowerConfig {
+  /// Enable rtcwake poweroff between refresh cycles for maximum battery
+  /// savings. Requires DS3231 RTC with INT/SQW wired to GPIO4.
+  /// Default: false.
   #[serde(default)]
   pub shutdown_after_cycle: bool,
+
+  /// Refresh interval (seconds) when charging or when no battery sensor is
+  /// detected (e.g. dev machine). Default: 1200 (20 minutes).
+  #[serde(default = "default_charging_interval")]
+  pub charging_interval_secs: u64,
+
+  /// Seconds to stay awake after each refresh cycle before sleeping or
+  /// shutting down. Gives a window for SSH access. Default: 120 (2 minutes).
+  #[serde(default = "default_linger")]
+  pub linger_secs: u64,
+
+  /// Don't rtcwake-shutdown while SSH sessions are active unless the battery
+  /// percentage drops below this value. Set to 0 to disable SSH detection.
+  /// Default: 30.
+  #[serde(default = "default_ssh_inhibit")]
+  pub ssh_inhibit_below_percent: u8,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -114,6 +137,15 @@ fn default_goals() -> Vec<GoalConfig> {
        GoalConfig { sport: SportType::Swim,
                     km:    30.0, },]
 }
+fn default_charging_interval() -> u64 {
+  1200
+}
+fn default_linger() -> u64 {
+  120
+}
+fn default_ssh_inhibit() -> u8 {
+  30
+}
 
 impl Default for DisplayConfig {
   fn default() -> Self {
@@ -123,8 +155,16 @@ impl Default for DisplayConfig {
            goals:                default_goals(),
            polyline_thickness:   default_polyline_thickness(),
            show_totals:          default_show_totals(),
-           show_longest_fastest: default_show_longest_fastest(),
-           shutdown_after_cycle: false, }
+           show_longest_fastest: default_show_longest_fastest(), }
+  }
+}
+
+impl Default for PowerConfig {
+  fn default() -> Self {
+    Self { shutdown_after_cycle:      false,
+           charging_interval_secs:    default_charging_interval(),
+           linger_secs:               default_linger(),
+           ssh_inhibit_below_percent: default_ssh_inhibit(), }
   }
 }
 
@@ -252,7 +292,8 @@ impl Config {
       // No config file yet — return defaults so the interactive setup can fill it in
       log::info!("No config file found, using defaults for interactive setup");
       return Ok(Self { strava:  StravaConfig::default(),
-                       display: DisplayConfig::default(), });
+                       display: DisplayConfig::default(),
+                       power:   PowerConfig::default(), });
     }
 
     Self::load_from_for_auth(&path)

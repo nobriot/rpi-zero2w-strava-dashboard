@@ -106,9 +106,6 @@ fn run() -> Result<()> {
                    }.map_err(errors::DashError::Config)?;
   log::info!("Config loaded successfully");
 
-  let sleep_secs = config.display.sleep_interval_secs;
-  let low_power = config.display.shutdown_after_cycle;
-
   loop {
     match try_cycle(&config, &args) {
       Ok(()) => {},
@@ -141,26 +138,64 @@ fn run() -> Result<()> {
       break;
     }
 
-    // Check if we're inside the quiet window
+    // Fresh battery read for power decision
+    let battery = power::read_battery();
+    let on_power = battery.as_ref().is_none_or(|b| b.is_charging);
+    let battery_pct = battery.as_ref().map(|b| b.percentage);
+
+    // On external power (or no battery sensor): short interval, ignore quiet
+    // hours, no shutdown. This also covers dev machines without an INA219.
+    if on_power {
+      let secs = config.power.charging_interval_secs;
+      log::info!("On power — sleeping {secs}s");
+      std::thread::sleep(std::time::Duration::from_secs(secs));
+      continue;
+    }
+
+    // Battery mode: respect quiet hours
     let sleep_duration = if is_quiet_time(&config.display) {
       let secs = seconds_until_quiet_end(&config.display);
-      log::info!("Quiet hours ({:02}:00–{:02}:00) — sleeping for {secs}s until wake",
+      log::info!("Quiet hours ({:02}:00–{:02}:00) — sleeping {secs}s until wake",
                  config.display.quiet_start_hour,
                  config.display.quiet_end_hour,);
       secs
     } else {
-      log::info!("Sleeping for {} seconds...", sleep_secs);
-      sleep_secs
+      let secs = config.display.sleep_interval_secs;
+      log::info!("Battery mode — sleeping {secs}s");
+      secs
     };
 
-    if low_power {
-      // Try rtcwake poweroff first (requires DS3231 INT wired to GPIO3)
-      if power::try_rtcwake_shutdown(sleep_duration) {
-        break;
-      }
+    // Linger: stay awake briefly so a user can SSH in (capped to sleep duration)
+    let linger = config.power.linger_secs.min(sleep_duration);
+    if linger > 0 {
+      log::info!("Lingering {linger}s for SSH access…");
+      std::thread::sleep(std::time::Duration::from_secs(linger));
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(sleep_duration));
+    let remaining = sleep_duration.saturating_sub(linger);
+
+    // Decide whether to rtcwake-shutdown
+    let ssh_active = power::has_ssh_sessions();
+    let ssh_inhibits = config.power.ssh_inhibit_below_percent > 0
+                       && ssh_active
+                       && battery_pct.is_none_or(|p| p > config.power.ssh_inhibit_below_percent);
+
+    log::info!("Power: battery={}, ssh={ssh_active}, ssh_inhibits={ssh_inhibits}, \
+                shutdown_after_cycle={}",
+               battery_pct.map_or("N/A".to_string(), |p| format!("{p}%")),
+               config.power.shutdown_after_cycle,);
+
+    if config.power.shutdown_after_cycle
+       && !ssh_inhibits
+       && remaining > 0
+       && power::try_rtcwake_shutdown(remaining)
+    {
+      break;
+    }
+
+    if remaining > 0 {
+      std::thread::sleep(std::time::Duration::from_secs(remaining));
+    }
   }
 
   Ok(())

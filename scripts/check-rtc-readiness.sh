@@ -197,12 +197,12 @@ echo
 # Summary
 echo "=== Summary: $ok passed, $warn warnings, $fail failures ==="
 if [ $fail -gt 0 ]; then
-  echo "Fix the failures above before enabling shutdown_after_cycle."
+  echo "Fix the failures above before enabling [power] shutdown_after_cycle."
   exit 1
 elif [ $warn -gt 0 ]; then
   echo "Warnings present — rtcwake may still work. Test with: sudo rtcwake -m off -s 120"
   exit 0
 else
-  echo "All checks passed! Safe to enable shutdown_after_cycle = true"
+  echo "All checks passed! Safe to enable [power] shutdown_after_cycle = true"
   exit 0
 fi

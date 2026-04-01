@@ -30,12 +30,6 @@ show_totals = false
 # Set to false to hide it and give more space to other sections. Default: true.
 show_longest_fastest = true
 
-# Low-power mode: disable HDMI and WiFi between refresh cycles to extend
-# battery life (~50% power reduction). WiFi is re-enabled before each cycle.
-# If the DS3231 INT pin is wired to GPIO3, also attempts rtcwake poweroff.
-# Default: false
-shutdown_after_cycle = false
-
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4
 
@@ -56,3 +50,22 @@ km = 500.0
 [[display.goals]]
 sport = "swim"
 km = 30.0
+
+# ── Power management (all optional) ─────────────────────────────────────────
+[power]
+# Enable rtcwake poweroff between refresh cycles for maximum battery savings.
+# Requires DS3231 RTC with INT/SQW wired to GPIO4 and the gpio-shutdown
+# overlay configured. Default: false
+shutdown_after_cycle = false
+
+# Refresh interval (seconds) when charging or when no battery sensor is
+# detected (e.g. running on a dev machine). Default: 1200 (20 minutes)
+charging_interval_secs = 1200
+
+# Seconds to stay awake after each refresh cycle before sleeping or shutting
+# down. Gives a window for SSH access. Default: 120 (2 minutes)
+linger_secs = 120
+
+# Don't rtcwake-shutdown while SSH sessions are active unless battery drops
+# below this percentage. Set to 0 to disable SSH detection. Default: 30
+ssh_inhibit_below_percent = 30
