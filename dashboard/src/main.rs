@@ -145,10 +145,15 @@ fn run() -> Result<()> {
     // On external power (or no battery sensor): short interval, ignore quiet
     // hours, no shutdown. This also covers dev machines without an INA219.
     if on_power {
+      // Re-enable peripherals before the next cycle
+      power::set_peripherals_normal();
       let secs = config.power.charging_interval_secs;
       log::info!("On power — sleeping {secs}s");
       std::thread::sleep(std::time::Duration::from_secs(secs));
       continue;
+    } else {
+      // Disable non-essential peripherals during long sleep to save power
+      power::set_peripherals_low_power();
     }
 
     // Battery mode: respect quiet hours
