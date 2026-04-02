@@ -87,7 +87,6 @@ pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
 /// (failures are logged and ignored).
 pub fn set_peripherals_low_power() {
   log::info!("Disabling non-essential peripherals for low-power sleep");
-  set_hdmi_status(Status::Disabled);
   set_bluetooth_status(Status::Disabled);
   set_usb_status(Status::Disabled);
 }
@@ -95,9 +94,8 @@ pub fn set_peripherals_low_power() {
 /// Re-enable peripherals before the next active cycle.
 pub fn set_peripherals_normal() {
   log::info!("Re-enabling peripherals");
-  set_usb_status(Status::Enabled);
   set_bluetooth_status(Status::Enabled);
-  set_hdmi_status(Status::Enabled);
+  set_usb_status(Status::Enabled);
 }
 
 /// Whether a peripheral is currently enabled or disabled.
@@ -114,114 +112,50 @@ pub enum Status {
 
 const USB_BIND: &str = "/sys/bus/usb/drivers/usb/bind";
 const USB_UNBIND: &str = "/sys/bus/usb/drivers/usb/unbind";
-const USB_PORT: &str = "1-1";
 
-/// Read whether the USB/LAN hub is currently bound to its kernel driver.
-pub fn get_usb_status() -> Status {
-  // If the port directory exists under the driver, the device is bound
-  if std::path::Path::new(&format!("/sys/bus/usb/drivers/usb/{USB_PORT}")).exists() {
-    Status::Enabled
-  } else {
-    Status::Disabled
-  }
+/// Discover USB device names from /sys/bus/usb/devices/.
+/// Returns entries like "1-0:1.0", "usb1", etc.
+fn usb_device_names() -> Vec<String> {
+  let devices_dir = std::path::Path::new("/sys/bus/usb/devices");
+  let Ok(entries) = fs::read_dir(devices_dir) else {
+    return Vec::new();
+  };
+  entries.filter_map(|e| {
+           let entry = e.ok()?;
+           let name = entry.file_name().into_string().ok()?;
+           // Only include entries that have a uevent file
+           if entry.path().join("uevent").exists() { Some(name) } else { None }
+         })
+         .collect()
 }
 
-/// Enable or disable the USB/LAN hub. Returns the resulting status.
-pub fn set_usb_status(status: Status) -> Status {
+/// Enable or disable all USB devices by writing to the bind/unbind sysfs files.
+pub fn set_usb_status(status: Status) {
   let path = match status {
     Status::Enabled => USB_BIND,
     Status::Disabled => USB_UNBIND,
   };
 
-  match fs::write(path, USB_PORT) {
-    Ok(()) => {
-      log::info!("USB/LAN {}", if status == Status::Enabled { "enabled" } else { "disabled" });
-      status
-    },
-    Err(e) => {
-      log::warn!("Failed to write to {path}: {e}");
-      get_usb_status()
-    },
+  let names = usb_device_names();
+  if names.is_empty() {
+    log::debug!("No USB devices found in /sys/bus/usb/devices/");
+    return;
   }
-}
 
-// ── HDMI ────────────────────────────────────────────────────────────────────
-// Turning off HDMI saves ~30mA on the Pi Zero 2W.
-// On modern kernels (Bookworm+) the vc4 DRM driver exposes DPMS via
-// /sys/class/drm/card?-HDMI-A-1/dpms. Alternatively, `tvservice -o`
-// and `tvservice -p` work on older firmware.
-
-/// Read whether the HDMI output is currently on.
-pub fn get_hdmi_status() -> Status {
-  if let Some(dpms) = read_hdmi_dpms() {
-    if dpms.trim() == "On" { Status::Enabled } else { Status::Disabled }
-  } else {
-    // Fallback: assume enabled if we can't determine
-    Status::Enabled
-  }
-}
-
-/// Enable or disable the HDMI output. Returns the resulting status.
-pub fn set_hdmi_status(status: Status) -> Status {
-  // Try KMS/DRM dpms sysfs first
-  if let Some(dpms_path) = find_hdmi_dpms_path() {
-    let value = match status {
-      Status::Enabled => "On",
-      Status::Disabled => "Off",
-    };
-    if fs::write(&dpms_path, value).is_ok() {
-      log::info!("HDMI {}", if status == Status::Enabled { "enabled" } else { "disabled" });
-      return status;
+  for name in &names {
+    match fs::write(path, name) {
+      Ok(()) => {
+        log::debug!("USB device {name} {}",
+                    if status == Status::Enabled { "bound" } else { "unbound" });
+      },
+      Err(e) => {
+        // ENODEV / EBUSY are expected if already in the target state
+        log::debug!("Failed to write {name} to {path}: {e}");
+      },
     }
   }
 
-  // Fallback to tvservice (works on older firmware)
-  let args = match status {
-    Status::Disabled => vec!["-o"],
-    Status::Enabled => vec!["-p"],
-  };
-
-  match Command::new("tvservice").args(&args).output() {
-    Ok(output) if output.status.success() => {
-      log::info!("HDMI {} via tvservice",
-                 if status == Status::Enabled { "enabled" } else { "disabled" });
-      status
-    },
-    Ok(output) => {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      log::warn!("tvservice failed: {}", stderr.trim());
-      get_hdmi_status()
-    },
-    Err(e) => {
-      log::warn!("tvservice not found: {e}");
-      get_hdmi_status()
-    },
-  }
-}
-
-/// Find the sysfs DPMS path for the HDMI connector (card?-HDMI-A-1).
-fn find_hdmi_dpms_path() -> Option<std::path::PathBuf> {
-  let drm_dir = std::path::Path::new("/sys/class/drm");
-  if !drm_dir.exists() {
-    return None;
-  }
-  for entry in fs::read_dir(drm_dir).ok()? {
-    let entry = entry.ok()?;
-    let name = entry.file_name();
-    if name.to_string_lossy().contains("HDMI") {
-      let dpms = entry.path().join("dpms");
-      if dpms.exists() {
-        return Some(dpms);
-      }
-    }
-  }
-  None
-}
-
-/// Read the current HDMI DPMS state from sysfs.
-fn read_hdmi_dpms() -> Option<String> {
-  let path = find_hdmi_dpms_path()?;
-  fs::read_to_string(path).ok()
+  log::info!("USB {}", if status == Status::Enabled { "enabled" } else { "disabled" });
 }
 
 // ── Bluetooth ───────────────────────────────────────────────────────────────

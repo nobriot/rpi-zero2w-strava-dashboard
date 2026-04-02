@@ -31,6 +31,10 @@ pub struct Args {
   #[arg(long)]
   pub show_all_sports: bool,
 
+  /// Sync /boot/firmware/config.txt with the expected version at startup
+  #[arg(long)]
+  pub sync_firmware: bool,
+
   /// Resolution scale factor for PNG export (default: 1, use 2 for hi-res)
   #[arg(long, default_value = "1", value_name = "N")]
   pub scale: u32,

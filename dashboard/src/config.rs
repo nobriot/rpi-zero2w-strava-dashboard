@@ -13,7 +13,7 @@ fn restrict_permissions(path: &Path) {
   }
 }
 
-const CONFIG_EXAMPLE: &str = include_str!("../../config.example.toml");
+const CONFIG_EXAMPLE: &str = include_str!("../../dist/config.example.toml");
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -54,6 +54,11 @@ pub struct PowerConfig {
   /// Default: 30.
   #[serde(default = "default_ssh_inhibit")]
   pub ssh_inhibit_below_percent: u8,
+
+  /// Sync /boot/firmware/config.txt with the expected version at startup.
+  /// Default: false.
+  #[serde(default)]
+  pub sync_firmware: bool,
 }
 
 fn default_charging_interval() -> u64 {
@@ -71,7 +76,8 @@ impl Default for PowerConfig {
     Self { shutdown_after_cycle:      false,
            charging_interval_secs:    default_charging_interval(),
            linger_secs:               default_linger(),
-           ssh_inhibit_below_percent: default_ssh_inhibit(), }
+           ssh_inhibit_below_percent: default_ssh_inhibit(),
+           sync_firmware:             false, }
   }
 }
 

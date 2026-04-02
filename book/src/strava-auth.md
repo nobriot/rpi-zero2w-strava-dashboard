@@ -19,7 +19,7 @@ cd rpi-zero2w-strava-dashboard
 Copy the example configuration and fill in your Strava credentials:
 
 ```bash
-cp config.example.toml my-config.toml
+cp dist/config.example.toml my-config.toml
 ```
 
 Open `my-config.toml` in a text editor and enter your Client ID and Client

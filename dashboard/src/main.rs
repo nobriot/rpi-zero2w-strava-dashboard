@@ -4,6 +4,7 @@ use clap::{CommandFactory, FromArgMatches};
 mod args;
 mod config;
 mod errors;
+mod firmware;
 mod power;
 
 use args::Args;
@@ -106,6 +107,15 @@ fn run() -> Result<()> {
                      None => Config::load(),
                    }.map_err(DashError::Config)?;
   log::info!("Config loaded successfully");
+
+  // Sync boot firmware config if enabled via CLI flag or config file
+  if args.sync_firmware || config.power.sync_firmware {
+    match firmware::sync_boot_config() {
+      Ok(true) => log::info!("Boot firmware config updated"),
+      Ok(false) => {},
+      Err(e) => log::warn!("Failed to sync boot firmware config: {e}"),
+    }
+  }
 
   loop {
     match try_cycle(&mut config, &args) {

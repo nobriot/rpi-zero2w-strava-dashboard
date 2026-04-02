@@ -10,7 +10,7 @@ copy it manually:
 
 ```bash
 # From your computer
-scp install/strava-dashboard.service pi@photopainter.local:/tmp/
+scp dist/strava-dashboard.service pi@photopainter.local:/tmp/
 
 # On the Pi
 ssh pi@photopainter.local

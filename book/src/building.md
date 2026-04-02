@@ -122,7 +122,7 @@ scp target/aarch64-unknown-linux-gnu/release/strava-dashboard \
   pi@photopainter.local:/tmp/
 
 # Copy the systemd service file
-scp install/strava-dashboard.service \
+scp dist/strava-dashboard.service \
   pi@photopainter.local:/tmp/
 
 # SSH into the Pi and install

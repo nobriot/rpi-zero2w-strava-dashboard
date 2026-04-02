@@ -12,8 +12,8 @@ Somebody said vide-coding is for toys, not production... So let's build a toy! ð
 This is the first project where I experimented with copilot / claude a little
 bit to get a feel for what they can do.
 
-Started coding the thing myself and slowly let the coding agent take over, though
-I probably micro-manage them too much.
+Started coding the thing myself and slowly let the coding agent take over,
+though I probably micro-manage them too much.
 
 ---
 
@@ -44,8 +44,6 @@ Seems like a good possibility.
 Witty Pi 4 Mini ?
 Seems overkill
 https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
-
-Have the pi wake up/sync as predictable times (8:00 -> 9:00 -> 10:00) if interval is set to 1h.
 
 Power management: Disable everything (HDMI; USB; bluetooth)
 Probably makes sense to install a pre-made /boot/firmware/config.txt that we include_str! in the program
@@ -106,7 +104,7 @@ cross build --release --target aarch64-unknown-linux-gnu
 scp target/aarch64-unknown-linux-gnu/release/rpi-zero2w-strava-dashboard pi@<host>:/usr/local/bin/
 
 # Copy systemd services
-scp install/strava-dashboard.service pi@<host>:/etc/systemd/system/
+scp dist/strava-dashboard.service pi@<host>:/etc/systemd/system/
 
 # Enable services on the RPi (via SSH)
 ssh pi@<host> 'sudo systemctl daemon-reload && sudo systemctl enable --now strava-dashboard'
@@ -148,7 +146,7 @@ Cargo workspace with 3 crates:
 
 ## Configuration
 
-See the `config.example.toml` for available keys.
+See the `dist/config.example.toml` for available keys.
 Config file (default): `~/.config/rpi-zero2w-strava-dashboard/config.toml`
 
 ---

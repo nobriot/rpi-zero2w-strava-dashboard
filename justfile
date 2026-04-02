@@ -144,7 +144,7 @@ cross:
 deploy host:
     cross build --release --target aarch64-unknown-linux-gnu
     scp target/aarch64-unknown-linux-gnu/release/strava-dashboard {{host}}:/tmp/strava-dashboard
-    scp install/strava-dashboard.service {{host}}:/tmp/strava-dashboard.service
+    scp dist/strava-dashboard.service {{host}}:/tmp/strava-dashboard.service
     ssh {{host}} 'sudo mv /tmp/strava-dashboard /usr/local/bin/strava-dashboard && sudo mv /tmp/strava-dashboard.service /etc/systemd/system/strava-dashboard.service && sudo systemctl daemon-reload && sudo systemctl restart strava-dashboard'
     @echo "Deployed and restarted strava-dashboard on {{host}}"
 
