@@ -7,7 +7,7 @@ mod errors;
 mod power;
 
 use args::Args;
-use chrono::{Datelike, Local, NaiveDate, Timelike, Utc};
+use chrono::{Datelike, Duration, Local, NaiveDate, Timelike, Utc};
 use config::Config;
 use errors::{DashError, Result};
 use std::path::PathBuf;
@@ -147,8 +147,8 @@ fn run() -> Result<()> {
     if on_power {
       // Re-enable peripherals before the next cycle
       power::set_peripherals_normal();
-      let secs = config.power.charging_interval_secs;
-      log::info!("On power — sleeping {secs}s");
+      let secs = seconds_until_next_slot(&config.display, config.power.charging_interval_secs);
+      log::info!("On power — sleeping {secs}s (next grid slot)");
       std::thread::sleep(std::time::Duration::from_secs(secs));
       continue;
     } else {
@@ -164,8 +164,8 @@ fn run() -> Result<()> {
                  config.display.quiet_end_hour,);
       secs
     } else {
-      let secs = config.display.sleep_interval_secs;
-      log::info!("Battery mode — sleeping {secs}s");
+      let secs = seconds_until_next_slot(&config.display, config.display.sleep_interval_secs);
+      log::info!("Battery mode — sleeping {secs}s (next grid slot)");
       secs
     };
 
@@ -406,6 +406,51 @@ fn seconds_until_quiet_end(display: &display::config::DisplayConfig) -> u64 {
 
   // At least 60 seconds to avoid a busy-loop from rounding
   total_secs.max(60)
+}
+
+/// Compute seconds until the next grid-aligned wake slot.
+///
+/// The grid is anchored at `quiet_end_hour:00:00` each day, with slots
+/// spaced `interval_secs` apart.  For example, with quiet_end=6 and
+/// interval=1200 (20 min), the slots are 06:00, 06:20, 06:40, 07:00, ...
+///
+/// If the next slot would fall inside quiet hours, returns the seconds
+/// until `quiet_end_hour` instead (i.e. the first slot of the next active
+/// window).
+fn seconds_until_next_slot(display: &display::config::DisplayConfig, interval_secs: u64) -> u64 {
+  let now = Local::now();
+  let today_anchor = now.date_naive()
+                        .and_hms_opt(display.quiet_end_hour, 0, 0)
+                        .expect("valid quiet_end_hour")
+                        .and_local_timezone(Local)
+                        .single()
+                        .expect("unambiguous local time");
+
+  // Use today's anchor if it's in the past, otherwise yesterday's.
+  let anchor = if today_anchor <= now {
+    today_anchor
+  } else {
+    today_anchor - Duration::days(1)
+  };
+
+  let elapsed = (now - anchor).num_seconds() as u64;
+  let remainder = elapsed % interval_secs;
+  let next_in = if remainder == 0 { interval_secs } else { interval_secs - remainder };
+
+  // Check whether the target wake time would land in quiet hours.
+  let wake_time = now + Duration::seconds(next_in as i64);
+  let wake_hour = wake_time.hour();
+  let in_quiet = {
+    let start = display.quiet_start_hour;
+    let end = display.quiet_end_hour;
+    if start <= end {
+      wake_hour >= start && wake_hour < end
+    } else {
+      wake_hour >= start || wake_hour < end
+    }
+  };
+
+  if in_quiet { seconds_until_quiet_end(display) } else { next_in.max(60) }
 }
 
 /// Load avatar from cache or fetch from Strava CDN.
