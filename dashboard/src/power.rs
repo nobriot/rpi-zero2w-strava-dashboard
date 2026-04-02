@@ -80,3 +80,19 @@ pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
     },
   }
 }
+
+// pub enum Status {
+//   Enabled,
+//   Disabled,
+// }
+
+// /// Read if we have 'dtoverlay=pi3-disable-bt' in /boot/firmware/config.txt
+// /// if we
+// pub fn get_bluetooth_status() -> Status {
+//   todo!();
+// }
+
+// // Just insert
+// pub fn set_bluetooth_status(status: Status) {
+//   todo!();
+// }

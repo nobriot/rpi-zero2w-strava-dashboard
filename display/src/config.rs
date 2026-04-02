@@ -11,6 +11,7 @@ pub struct GoalConfig {
 /// Display and scheduling configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DisplayConfig {
+  // FIXME: Sleep interface and quiet hours should also move to PowerConfig
   /// Sleep interval between refreshes in seconds (default: 10800 = 3 hours)
   #[serde(default = "default_sleep_interval")]
   pub sleep_interval_secs: u64,

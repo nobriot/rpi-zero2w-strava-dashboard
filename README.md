@@ -45,6 +45,11 @@ Witty Pi 4 Mini ?
 Seems overkill
 https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
 
+Have the pi wake up/sync as predictable times (8:00 -> 9:00 -> 10:00) if interval is set to 1h.
+
+Power management: Disable everything (HDMI; USB; bluetooth)
+Probably makes sense to install a pre-made /boot/firmware/config.txt that we include_str! in the program
+
 
 ## What It Does
 

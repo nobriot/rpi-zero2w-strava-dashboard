@@ -9,12 +9,20 @@
 //! Generated images are saved to `tmp/snapshots/` with the current git commit
 //! hash in the filename for easy comparison across versions.
 
-use display::renderer::{DisplayConfig, Scale, render_dashboard};
+use display::config::DisplayConfig;
+use display::renderer::{Scale, render_dashboard};
 use image::RgbImage;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Minimal config wrapper — only the [display] section is needed for rendering.
+#[derive(Debug, Deserialize)]
+struct TestConfig {
+  #[serde(default)]
+  display: DisplayConfig,
+}
 
 /// One entry in fixtures.toml
 #[derive(Debug, Deserialize)]
@@ -100,16 +108,15 @@ fn render_for_entry(entry: &TestEntry) -> (String, RgbImage) {
   let config_path = root.join("tests").join(&entry.config);
   let fixture_dir = root.join("tests/fixtures").join(entry.athlete_id.to_string());
 
-  // Load config
+  // Load config (only the [display] section matters for rendering)
   let config_str = fs::read_to_string(&config_path).unwrap_or_else(|e| {
                                                      panic!("Failed to read config {}: {e}",
                                                             config_path.display())
                                                    });
-  let config: strava::config::Config =
-    strava::config::Config::from_toml(&config_str).unwrap_or_else(|e| {
-                                                    panic!("Failed to parse config {}: {e}",
-                                                           config_path.display())
-                                                  });
+  let config: TestConfig = toml::from_str(&config_str).unwrap_or_else(|e| {
+                                                        panic!("Failed to parse config {}: {e}",
+                                                               config_path.display())
+                                                      });
 
   // Load fixture data
   let athlete_stats: strava::types::AthleteStats = load_fixture(&fixture_dir, "stats");
@@ -118,18 +125,12 @@ fn render_for_entry(entry: &TestEntry) -> (String, RgbImage) {
   let avatar_bytes = fs::read(fixture_dir.join("avatar.img")).ok();
 
   let firstname = athlete.firstname.as_deref().unwrap_or("Athlete");
-  let dashboard =
-    strava::stats::DashboardStats::compute(&athlete_stats, &activities, firstname, true);
-
-  let display_config = DisplayConfig { goals:                config.display.goals.clone(),
-                                       polyline_thickness:   config.display.polyline_thickness,
-                                       show_totals:          config.display.show_totals,
-                                       show_longest_fastest: config.display.show_longest_fastest, };
+  let dashboard = strava::stats::compute(&athlete_stats, &activities, firstname, true);
 
   let scale = Scale::new(1);
   let img = render_dashboard(&dashboard,
                              None, // no battery in tests
-                             &display_config,
+                             &config.display,
                              avatar_bytes.as_deref(),
                              false, // not offline
                              scale);
