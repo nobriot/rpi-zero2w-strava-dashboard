@@ -340,15 +340,16 @@ fn fetch_stats_online(config: &mut Config,
                       -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let mut client = strava::client::Client::new(config.strava.clone());
   client.get_token()?;
+  log::info!("Fetching Strava stats");
 
-  log::info!("Getting athlete");
+  log::debug!("Getting athlete");
   let athlete = client.get_athlete()?;
-  log::info!("Athlete: {} (id: {})", athlete.full_name(), athlete.id);
+  log::debug!("Athlete: {} (id: {})", athlete.full_name(), athlete.id);
 
   // Fetch avatar (non-fatal if unavailable)
   let avatar = load_or_fetch_avatar(&client, athlete.profile.as_deref());
 
-  log::info!("Getting athlete stats");
+  log::debug!("Getting athlete stats");
   let stats = client.get_athlete_stats(athlete.id)?;
 
   let year_start = NaiveDate::from_ymd_opt(Utc::now().year(), 1, 1).unwrap()
@@ -357,9 +358,9 @@ fn fetch_stats_online(config: &mut Config,
                                                                    .and_utc()
                                                                    .timestamp();
 
-  log::info!("Getting activities since {year_start}");
+  log::debug!("Getting activities since {year_start}");
   let activities = client.get_activities(year_start)?;
-  log::info!("Fetched {} activities", activities.len());
+  log::debug!("Fetched {} activities", activities.len());
 
   // Persist updated refresh token if it changed
   if client.token_refreshed() {
@@ -503,7 +504,7 @@ fn load_or_fetch_avatar(client: &strava::client::Client,
   if cache_path.exists() {
     match std::fs::read(&cache_path) {
       Ok(bytes) if !bytes.is_empty() => {
-        log::info!("Avatar loaded from cache");
+        log::debug!("Avatar loaded from cache");
         return Some(bytes);
       },
       _ => {},

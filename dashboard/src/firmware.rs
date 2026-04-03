@@ -22,7 +22,7 @@ pub fn sync_boot_config() -> Result<bool, String> {
     fs::read_to_string(BOOT_CONFIG_PATH).map_err(|e| format!("Failed to read {BOOT_CONFIG_PATH}: {e}"))?;
 
   if current == EXPECTED_CONFIG {
-    log::info!("firmware: {BOOT_CONFIG_PATH} is up to date");
+    log::debug!("firmware: {BOOT_CONFIG_PATH} is up to date");
     return Ok(false);
   }
 
@@ -36,6 +36,6 @@ pub fn sync_boot_config() -> Result<bool, String> {
 
   fs::write(path, EXPECTED_CONFIG).map_err(|e| format!("Failed to write {BOOT_CONFIG_PATH}: {e}"))?;
 
-  log::info!("firmware: {BOOT_CONFIG_PATH} updated successfully");
+  log::info!("firmware: {BOOT_CONFIG_PATH} updated successfully. Back up at : {back_up_filename}");
   Ok(true)
 }
