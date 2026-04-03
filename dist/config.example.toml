@@ -12,16 +12,8 @@ client_id = "YOUR_CLIENT_ID"
 client_secret = "YOUR_CLIENT_SECRET"
 refresh_token = "YOUR_REFRESH_TOKEN"
 
-# ── Display & scheduling settings (all optional) ─────────────────────────────
+# ── Display settings (all optional) ──────────────────────────────────────────
 [display]
-# How often to refresh the dashboard (seconds). Default: 10800 (3 hours)
-sleep_interval_secs = 10800
-
-# Quiet hours — no refresh between these hours (0–23, local time).
-# Default: 20:00–06:00
-quiet_start_hour = 20
-quiet_end_hour = 6
-
 # Show the TOTALS summary row (activity count, distance, time, elevation, kudos).
 # Set to false to hide it and give more space to other sections. Default: true.
 show_totals = false
@@ -51,8 +43,15 @@ km = 500.0
 sport = "swim"
 km = 30.0
 
-# ── Power management (all optional) ─────────────────────────────────────────
+# ── Power management (all optional) ──────────────────────────────────────────
 [power]
+# How often to refresh the dashboard (seconds). Default: 10800 (3 hours)
+sleep_interval_secs = 10800
+
+# Quiet hours -- no refresh between these hours (0-23, local time)
+# when running on battery. Default: {start = 20, end = 6}
+quiet_hours = { start = 20, end = 6 }
+
 # Enable rtcwake poweroff between refresh cycles for maximum battery savings.
 # Requires DS3231 RTC with INT/SQW wired to GPIO4 and the gpio-shutdown
 # overlay configured. Default: false
@@ -68,7 +67,7 @@ linger_secs = 120
 
 # Don't rtcwake-shutdown while SSH sessions are active unless battery drops
 # below this percentage. Set to 0 to disable SSH detection. Default: 30
-ssh_inhibit_below_percent = 30
+ssh_inhibit_below_percent = 60
 
 # Write the recommended /boot/firmware/config.txt for the RPi
 # back-up will be written in /boot/firmware/config_{timestamp}.txt

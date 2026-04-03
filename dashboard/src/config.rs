@@ -30,9 +30,44 @@ pub struct Config {
   pub power: PowerConfig,
 }
 
+/// Quiet hours window (no refresh during this period when on battery).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct QuietHours {
+  /// Hour (0-23, local time) when the quiet period starts. Default: 20.
+  #[serde(default = "default_quiet_start")]
+  pub start: u32,
+
+  /// Hour (0-23, local time) when the quiet period ends. Default: 6.
+  #[serde(default = "default_quiet_end")]
+  pub end: u32,
+}
+
+impl Default for QuietHours {
+  fn default() -> Self {
+    Self { start: default_quiet_start(),
+           end:   default_quiet_end(), }
+  }
+}
+
+fn default_quiet_start() -> u32 {
+  20
+}
+fn default_quiet_end() -> u32 {
+  6
+}
+
 /// Power management configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PowerConfig {
+  /// Sleep interval between refreshes in seconds (default: 10800 = 3 hours).
+  #[serde(default = "default_sleep_interval")]
+  pub sleep_interval_secs: u64,
+
+  /// Quiet hours -- no refresh between these hours when on battery.
+  /// Default: {start = 20, end = 6}.
+  #[serde(default)]
+  pub quiet_hours: QuietHours,
+
   /// Enable rtcwake poweroff between refresh cycles for maximum battery
   /// savings. Requires DS3231 RTC with INT/SQW wired to GPIO4.
   /// Default: false.
@@ -61,6 +96,9 @@ pub struct PowerConfig {
   pub sync_firmware: bool,
 }
 
+fn default_sleep_interval() -> u64 {
+  10800
+}
 fn default_charging_interval() -> u64 {
   1200
 }
@@ -68,12 +106,14 @@ fn default_linger() -> u64 {
   120
 }
 fn default_ssh_inhibit() -> u8 {
-  30
+  60
 }
 
 impl Default for PowerConfig {
   fn default() -> Self {
-    Self { shutdown_after_cycle:      false,
+    Self { sleep_interval_secs:       default_sleep_interval(),
+           quiet_hours:               QuietHours::default(),
+           shutdown_after_cycle:      false,
            charging_interval_secs:    default_charging_interval(),
            linger_secs:               default_linger(),
            ssh_inhibit_below_percent: default_ssh_inhibit(),

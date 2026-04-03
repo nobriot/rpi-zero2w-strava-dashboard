@@ -11,19 +11,6 @@ pub struct GoalConfig {
 /// Display and scheduling configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DisplayConfig {
-  // FIXME: Sleep interface and quiet hours should also move to PowerConfig
-  /// Sleep interval between refreshes in seconds (default: 10800 = 3 hours)
-  #[serde(default = "default_sleep_interval")]
-  pub sleep_interval_secs: u64,
-
-  /// Hour (0-23, local time) when the quiet period starts (default: 20)
-  #[serde(default = "default_quiet_start")]
-  pub quiet_start_hour: u32,
-
-  /// Hour (0-23, local time) when the quiet period ends (default: 8)
-  #[serde(default = "default_quiet_end")]
-  pub quiet_end_hour: u32,
-
   /// Ordered sport goals (1-3). Controls which progress bars appear and their
   /// order. First goal is always full-width; with 3 goals, 2nd and 3rd share
   /// a row.
@@ -44,15 +31,6 @@ pub struct DisplayConfig {
   pub show_longest_fastest: bool,
 }
 
-fn default_sleep_interval() -> u64 {
-  10800
-}
-fn default_quiet_start() -> u32 {
-  20
-}
-fn default_quiet_end() -> u32 {
-  8
-}
 fn default_polyline_thickness() -> u32 {
   4
 }
@@ -73,10 +51,7 @@ fn default_goals() -> Vec<GoalConfig> {
 
 impl Default for DisplayConfig {
   fn default() -> Self {
-    Self { sleep_interval_secs:  default_sleep_interval(),
-           quiet_start_hour:     default_quiet_start(),
-           quiet_end_hour:       default_quiet_end(),
-           goals:                default_goals(),
+    Self { goals:                default_goals(),
            polyline_thickness:   default_polyline_thickness(),
            show_totals:          default_show_totals(),
            show_longest_fastest: default_show_longest_fastest(), }

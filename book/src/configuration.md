@@ -27,39 +27,6 @@ after the initial setup.
 [display]
 ```
 
-### Refresh interval
-
-```toml
-sleep_interval_secs = 10800
-```
-
-How often the dashboard refreshes, in seconds. Default is **10800** (3 hours).
-
-| Value | Interval |
-|-------|----------|
-| 3600 | 1 hour |
-| 7200 | 2 hours |
-| 10800 | 3 hours (default) |
-| 21600 | 6 hours |
-| 43200 | 12 hours |
-
-> **Tip:** The Strava API has rate limits (100 requests per 15 minutes, 1000
-> per day). A 3-hour interval uses about 8 requests per day, well within
-> limits. Don't set this below 1 hour.
-
-### Quiet hours
-
-```toml
-quiet_start_hour = 20
-quiet_end_hour = 6
-```
-
-The dashboard won't refresh between these hours (local time). Default is
-**20:00 to 06:00** (8 PM to 6 AM). This saves power and avoids the display
-refreshing while you're asleep.
-
-Set both to the same value to disable quiet hours.
-
 ### Show/hide sections
 
 ```toml
@@ -116,6 +83,38 @@ Adjust the `km` values to match your personal goals for the year.
 [power]
 ```
 
+### Refresh interval
+
+```toml
+sleep_interval_secs = 10800
+```
+
+How often the dashboard refreshes, in seconds. Default is **10800** (3 hours).
+
+| Value | Interval |
+|-------|----------|
+| 3600 | 1 hour |
+| 7200 | 2 hours |
+| 10800 | 3 hours (default) |
+| 21600 | 6 hours |
+| 43200 | 12 hours |
+
+> **Tip:** The Strava API has rate limits (100 requests per 15 minutes, 1000
+> per day). A 3-hour interval uses about 8 requests per day, well within
+> limits. Don't set this below 1 hour.
+
+### Quiet hours
+
+```toml
+quiet_hours = { start = 20, end = 6 }
+```
+
+The dashboard won't refresh between these hours (local time). Default is
+**20:00 to 06:00** (8 PM to 6 AM). This saves power and avoids the display
+refreshing while you're asleep.
+
+Set both to the same value to disable quiet hours.
+
 ### Shutdown after cycle
 
 ```toml
@@ -148,7 +147,7 @@ down. This gives a window for SSH access. Default: **120** (2 minutes).
 ### SSH shutdown inhibit
 
 ```toml
-ssh_inhibit_below_percent = 30
+ssh_inhibit_below_percent = 60
 ```
 
 When SSH sessions are active, don't rtcwake-shutdown unless the battery drops
@@ -164,9 +163,6 @@ client_secret = "abcdef1234567890abcdef1234567890abcdef12"
 refresh_token = "fedcba0987654321fedcba0987654321fedcba09"
 
 [display]
-sleep_interval_secs = 10800
-quiet_start_hour = 22
-quiet_end_hour = 7
 show_totals = false
 show_longest_fastest = true
 polyline_thickness = 4
@@ -184,6 +180,8 @@ sport = "swim"
 km = 30.0
 
 [power]
+sleep_interval_secs = 10800
+quiet_hours = { start = 22, end = 7 }
 shutdown_after_cycle = false
 charging_interval_secs = 1200
 linger_secs = 120

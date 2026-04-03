@@ -169,15 +169,15 @@ fn run() -> Result<()> {
     }
 
     // Battery mode: respect quiet hours
-    let sleep_duration = if is_quiet_time(&config.display) {
-      let secs = seconds_until_quiet_end(&config.display);
-      log::info!("Quiet hours ({:02}:00–{:02}:00) — sleeping {secs}s until wake",
-                 config.display.quiet_start_hour,
-                 config.display.quiet_end_hour,);
+    let sleep_duration = if is_quiet_time(&config.power) {
+      let secs = seconds_until_quiet_end(&config.power);
+      log::info!("Quiet hours ({:02}:00-{:02}:00) -- sleeping {secs}s until wake",
+                 config.power.quiet_hours.start,
+                 config.power.quiet_hours.end,);
       secs
     } else {
-      let secs = seconds_until_next_slot(&config.display, config.display.sleep_interval_secs);
-      log::info!("Battery mode — sleeping {secs}s (next grid slot)");
+      let secs = seconds_until_next_slot(&config.power, config.power.sleep_interval_secs);
+      log::info!("Battery mode -- sleeping {secs}s (next grid slot)");
       secs
     };
 
@@ -379,25 +379,25 @@ fn fetch_stats_from_cache(show_all_sports: bool)
 }
 
 /// Check whether the current local time falls inside the quiet window.
-fn is_quiet_time(display: &display::config::DisplayConfig) -> bool {
+fn is_quiet_time(power: &config::PowerConfig) -> bool {
   let hour = Local::now().hour();
-  let start = display.quiet_start_hour;
-  let end = display.quiet_end_hour;
+  let start = power.quiet_hours.start;
+  let end = power.quiet_hours.end;
 
   if start <= end {
-    // e.g. quiet 02:00–06:00 (no midnight wrap)
+    // e.g. quiet 02:00-06:00 (no midnight wrap)
     hour >= start && hour < end
   } else {
-    // e.g. quiet 20:00–08:00 (wraps midnight)
+    // e.g. quiet 20:00-08:00 (wraps midnight)
     hour >= start || hour < end
   }
 }
 
 /// Compute seconds from now until the quiet window ends.
-fn seconds_until_quiet_end(display: &display::config::DisplayConfig) -> u64 {
+fn seconds_until_quiet_end(power: &config::PowerConfig) -> u64 {
   let now = Local::now();
   let hour = now.hour();
-  let end = display.quiet_end_hour;
+  let end = power.quiet_hours.end;
 
   // Hours remaining until the end hour
   let hours_left = if hour < end {
@@ -422,18 +422,17 @@ fn seconds_until_quiet_end(display: &display::config::DisplayConfig) -> u64 {
 
 /// Compute seconds until the next grid-aligned wake slot.
 ///
-/// The grid is anchored at `quiet_end_hour:00:00` each day, with slots
-/// spaced `interval_secs` apart.  For example, with quiet_end=6 and
+/// The grid is anchored at `quiet_hours.end` each day, with slots
+/// spaced `interval_secs` apart.  For example, with quiet end=6 and
 /// interval=1200 (20 min), the slots are 06:00, 06:20, 06:40, 07:00, ...
 ///
 /// If the next slot would fall inside quiet hours, returns the seconds
-/// until `quiet_end_hour` instead (i.e. the first slot of the next active
-/// window).
-fn seconds_until_next_slot(display: &display::config::DisplayConfig, interval_secs: u64) -> u64 {
+/// until quiet end instead (i.e. the first slot of the next active window).
+fn seconds_until_next_slot(power: &config::PowerConfig, interval_secs: u64) -> u64 {
   let now = Local::now();
   let today_anchor = now.date_naive()
-                        .and_hms_opt(display.quiet_end_hour, 0, 0)
-                        .expect("valid quiet_end_hour")
+                        .and_hms_opt(power.quiet_hours.end, 0, 0)
+                        .expect("valid quiet_hours.end")
                         .and_local_timezone(Local)
                         .single()
                         .expect("unambiguous local time");
@@ -453,8 +452,8 @@ fn seconds_until_next_slot(display: &display::config::DisplayConfig, interval_se
   let wake_time = now + Duration::seconds(next_in as i64);
   let wake_hour = wake_time.hour();
   let in_quiet = {
-    let start = display.quiet_start_hour;
-    let end = display.quiet_end_hour;
+    let start = power.quiet_hours.start;
+    let end = power.quiet_hours.end;
     if start <= end {
       wake_hour >= start && wake_hour < end
     } else {
@@ -462,7 +461,7 @@ fn seconds_until_next_slot(display: &display::config::DisplayConfig, interval_se
     }
   };
 
-  if in_quiet { seconds_until_quiet_end(display) } else { next_in.max(60) }
+  if in_quiet { seconds_until_quiet_end(power) } else { next_in.max(60) }
 }
 
 /// Load avatar from cache or fetch from Strava CDN.
