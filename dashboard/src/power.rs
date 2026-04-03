@@ -2,6 +2,33 @@ use chrono::Utc;
 use std::fs;
 use std::process::Command;
 
+/// Set the DS3231 wake alarm and halt the Pi.
+/// The DS3231 INT pin (wired to the RUN pad) will reboot
+/// the Pi when the alarm fires.
+#[allow(dead_code)]
+fn set_alarm_and_halt(sleep_secs: u64) {
+  // Clear any pending alarm
+  let _ = fs::write("/sys/class/rtc/rtc0/wakealarm", "0");
+
+  // Set alarm
+  let alarm = format!("+{sleep_secs}");
+  match fs::write("/sys/class/rtc/rtc0/wakealarm", &alarm) {
+    Ok(_) => log::info!("RTC alarm set for {sleep_secs}s from now"),
+    Err(e) => {
+      log::error!("Failed to set RTC alarm: {e}");
+      return; // Don't shut down if we can't set the alarm
+    },
+  }
+
+  log::info!("Halting — DS3231 INT -> RUN pad will reboot on alarm");
+
+  // Sync filesystem before halting
+  let _ = Command::new("sync").status();
+
+  // Halt (not poweroff — Pi stays in reset-able state)
+  let _ = Command::new("sudo").args(["shutdown", "-h", "now"]).status();
+}
+
 /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
 ///
 /// Requires the DS3231 INT/SQW pin to be wired to GPIO4, with the

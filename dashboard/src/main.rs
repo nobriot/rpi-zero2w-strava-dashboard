@@ -21,6 +21,8 @@ const STYLES: styling::Styles =
 
 static PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 
+const CYCLE_SECONDS_ON_POWER: u64 = 60;
+
 fn main() {
   env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
@@ -157,8 +159,8 @@ fn run() -> Result<()> {
     if on_power {
       // Re-enable peripherals before the next cycle
       power::set_peripherals_normal();
-      let secs = seconds_until_next_slot(&config.display, config.power.charging_interval_secs);
-      log::info!("On power — sleeping {secs}s (next grid slot)");
+      let secs = CYCLE_SECONDS_ON_POWER;
+      log::info!("On power — sleeping {secs}s before next cycle");
       std::thread::sleep(std::time::Duration::from_secs(secs));
       continue;
     } else {
