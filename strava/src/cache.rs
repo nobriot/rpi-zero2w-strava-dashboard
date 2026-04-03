@@ -47,9 +47,9 @@ impl Cache {
                                      format!("Failed to remove cache dir {}: {e}",
                                              self.dir.display())
                                    })?;
-      log::info!("Cache cleared: {}", self.dir.display());
+      log::debug!("Cache cleared: {}", self.dir.display());
     } else {
-      log::info!("Cache directory does not exist, nothing to clear");
+      log::debug!("Cache directory does not exist, nothing to clear");
     }
     Ok(())
   }
@@ -76,7 +76,7 @@ impl Cache {
 
     let age = Self::now().saturating_sub(entry.fetched_at);
     if age > entry.max_age {
-      log::info!("Cache entry '{key}' expired ({age}s old, max {0}s)", entry.max_age);
+      log::debug!("Cache entry '{key}' expired ({age}s old, max {0}s)", entry.max_age);
       return None;
     }
 
@@ -113,7 +113,7 @@ impl Cache {
         if let Err(e) = fs::write(self.path(key), &json) {
           log::warn!("Failed to write cache file '{key}': {e}");
         } else {
-          log::info!("Cached '{key}'");
+          log::debug!("Cached '{key}'");
         }
       },
       Err(e) => log::warn!("Failed to serialize cache entry '{key}': {e}"),

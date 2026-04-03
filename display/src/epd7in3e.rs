@@ -46,7 +46,7 @@ impl Epd7in3e {
 
     let mut epd = Self { spi, dc, rst, busy, pwr };
 
-    log::info!("EPD pins: DC={DC_PIN}, RST={RST_PIN}, BUSY={BUSY_PIN}, PWR={PWR_PIN}, SPI=0/CE0 @ 10MHz");
+    log::debug!("EPD pins: DC={DC_PIN}, RST={RST_PIN}, BUSY={BUSY_PIN}, PWR={PWR_PIN}, SPI=0/CE0 @ 10MHz");
     epd.power_on();
     epd.hardware_reset();
     epd.init_display()?;
@@ -211,13 +211,13 @@ impl Epd7in3e {
                                               buf.len())));
     }
 
-    log::info!("Sending image data ({} bytes) to EPD...", buf.len());
+    log::debug!("Sending image data ({} bytes) to EPD...", buf.len());
 
     // Write image data (command 0x10)
     self.send_command(0x10)?;
     let spi_start = std::time::Instant::now();
     self.send_data(buf)?;
-    log::info!("SPI data transfer took {:?}", spi_start.elapsed());
+    log::debug!("SPI data transfer took {:?}", spi_start.elapsed());
 
     // Trigger display refresh
     self.turn_on_display()?;
