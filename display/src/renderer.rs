@@ -549,9 +549,9 @@ fn draw_totals_row(img: &mut RgbImage,
                        Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
                        BLACK);
 
-  // Chart icon + "TOTALS" in orange, rest in black — centered as a single line
+  // Chart icon + "TOTALS" in orange, stats in black — left-aligned
   let y = sep_y + s.i(10);
-  icons::draw_bar_chart(img, s.u(MARGIN as u32), (y - s.i(6)) as u32, TITLE_COLOR, s.factor());
+  icons::draw_bar_chart(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
   let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
   draw_text_mut(img,
                 TITLE_COLOR,
@@ -567,9 +567,16 @@ fn draw_totals_row(img: &mut RgbImage,
                             stats.total_time_display(),
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
-  let text_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &center_text) as i32;
-  let center_x = (s.u(W) as i32 - text_w) / 2;
-  draw_text_mut(img, SECONDARY_COLOR, center_x, y, s.px(SECONDARY_FONT_SZ), font, &center_text);
+  let title_w = measure_text_width(font_bold, s.px(TITLE_FONT_SZ), TOTALS) as i32;
+  let stats_x = s.i(MARGIN) + icon_w + title_w + s.i(10);
+  let baseline_offset = s.i(4);
+  draw_text_mut(img,
+                SECONDARY_COLOR,
+                stats_x,
+                y + baseline_offset,
+                s.px(SECONDARY_FONT_SZ),
+                font,
+                &center_text);
 
   // Extra space after
   y + s.i(32)
