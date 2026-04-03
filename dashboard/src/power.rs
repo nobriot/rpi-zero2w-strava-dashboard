@@ -109,20 +109,42 @@ pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
   }
 }
 
-/// Disable non-essential peripherals to reduce power draw during sleep.
-/// Turns off HDMI, Bluetooth, and USB/LAN. Safe to call on dev machines
-/// (failures are logged and ignored).
-pub fn set_peripherals_low_power() {
-  log::info!("Disabling non-essential peripherals for low-power sleep");
-  set_bluetooth_status(Status::Disabled);
-  set_usb_status(Status::Disabled);
+/// Manages non-essential peripherals (Bluetooth, USB/LAN), tracking state
+/// to avoid redundant operations on cycles.
+pub struct Peripherals {
+  low_power: Option<bool>,
 }
 
-/// Re-enable peripherals before the next active cycle.
-pub fn set_peripherals_normal() {
-  log::info!("Re-enabling peripherals");
-  set_bluetooth_status(Status::Enabled);
-  set_usb_status(Status::Enabled);
+impl Peripherals {
+  pub fn new() -> Self {
+    Self { low_power: None }
+  }
+
+  /// Disable non-essential peripherals to save power during sleep.
+  pub fn set_low_power(&mut self) {
+    if let Some(lp) = self.low_power
+       && lp
+    {
+      return;
+    }
+    log::info!("Disabling non-essential peripherals for low-power usage");
+    set_bluetooth_status(Status::Disabled);
+    set_usb_status(Status::Disabled);
+    self.low_power = Some(true);
+  }
+
+  /// Re-enable peripherals before the next active cycle.
+  pub fn set_normal(&mut self) {
+    if let Some(lp) = self.low_power
+       && !lp
+    {
+      return;
+    }
+    log::info!("Re-enabling peripherals");
+    set_bluetooth_status(Status::Enabled);
+    set_usb_status(Status::Enabled);
+    self.low_power = Some(false);
+  }
 }
 
 /// Whether a peripheral is currently enabled or disabled.
@@ -157,7 +179,7 @@ fn usb_device_names() -> Vec<String> {
 }
 
 /// Enable or disable all USB devices by writing to the bind/unbind sysfs files.
-pub fn set_usb_status(status: Status) {
+fn set_usb_status(status: Status) {
   let path = match status {
     Status::Enabled => USB_BIND,
     Status::Disabled => USB_UNBIND,
@@ -213,7 +235,7 @@ pub fn get_bluetooth_status() -> Status {
 /// Enable or disable Bluetooth via rfkill. Returns the resulting status.
 /// For a persistent disable across reboots, add `dtoverlay=disable-bt` to
 /// /boot/firmware/config.txt.
-pub fn set_bluetooth_status(status: Status) -> Status {
+fn set_bluetooth_status(status: Status) -> Status {
   let action = match status {
     Status::Enabled => "unblock",
     Status::Disabled => "block",

@@ -203,11 +203,11 @@ impl Client {
                                    })?;
 
       if activities.is_empty() {
-        log::info!("No more activities on page {page}");
+        log::debug!("No more activities on page {page}");
         break;
       }
 
-      log::info!("Page {page}: {} activities", activities.len());
+      log::debug!("Page {page}: {} activities", activities.len());
       all_activities.extend(activities);
       page += 1;
     }

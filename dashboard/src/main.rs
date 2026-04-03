@@ -147,6 +147,8 @@ fn run() -> Result<()> {
     }
   }
 
+  let mut peripherals = power::Peripherals::new();
+
   loop {
     match try_cycle(&mut config, &args) {
       Ok(()) => {},
@@ -185,15 +187,13 @@ fn run() -> Result<()> {
     // On external power (or no battery sensor): short interval, ignore quiet
     // hours, no shutdown. This also covers dev machines without an INA219.
     if on_power {
-      // Re-enable peripherals before the next cycle
-      power::set_peripherals_normal();
+      peripherals.set_normal();
       let secs = CYCLE_SECONDS_ON_POWER;
-      log::info!("On power — sleeping {secs}s before next cycle");
+      log::info!("On power -- sleeping {secs}s before next cycle");
       std::thread::sleep(std::time::Duration::from_secs(secs));
       continue;
     } else {
-      // Disable non-essential peripherals during long sleep to save power
-      power::set_peripherals_low_power();
+      peripherals.set_low_power();
     }
 
     // Battery mode: respect quiet hours
