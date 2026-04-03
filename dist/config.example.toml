@@ -4,7 +4,8 @@
 # and fill in your Strava API credentials.
 #
 # Create a Strava API app at https://www.strava.com/settings/api
-# See docs/strava.md for detailed setup instructions.
+# See the docs for detailed setup instructions.
+# 
 
 # ── Strava API credentials (required) ────────────────────────────────────────
 [strava]
