@@ -150,6 +150,9 @@ fn run() -> Result<()> {
   let mut peripherals = power::Peripherals::new();
 
   loop {
+    // Re-enable WiFi if it was disabled during the previous sleep
+    peripherals.enable_wifi();
+
     match try_cycle(&mut config, &args) {
       Ok(()) => {},
       Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
@@ -217,6 +220,9 @@ fn run() -> Result<()> {
     }
 
     let remaining = sleep_duration.saturating_sub(linger);
+
+    // Linger is over -- disable WiFi to save power during sleep
+    peripherals.disable_wifi();
 
     // Decide whether to rtcwake-shutdown
     let ssh_active = power::has_ssh_sessions();

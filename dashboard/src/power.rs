@@ -109,18 +109,22 @@ pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
   }
 }
 
-/// Manages non-essential peripherals (Bluetooth, USB/LAN), tracking state
-/// to avoid redundant operations on cycles.
+/// Manages non-essential peripherals (Bluetooth, USB/LAN, WiFi), tracking
+/// state to avoid redundant operations on cycles.
 pub struct Peripherals {
-  low_power: Option<bool>,
+  low_power:     Option<bool>,
+  wifi_disabled: bool,
 }
 
 impl Peripherals {
   pub fn new() -> Self {
-    Self { low_power: None }
+    Self { low_power:     None,
+           wifi_disabled: false, }
   }
 
   /// Disable non-essential peripherals to save power during sleep.
+  /// WiFi is kept alive so the user can SSH in during the linger window;
+  /// call [`disable_wifi`] after the linger period.
   pub fn set_low_power(&mut self) {
     if let Some(lp) = self.low_power
        && lp
@@ -133,8 +137,29 @@ impl Peripherals {
     self.low_power = Some(true);
   }
 
+  /// Disable WiFi via rfkill. Called after the linger window when on battery
+  /// to save power during the long sleep.
+  pub fn disable_wifi(&mut self) {
+    if self.wifi_disabled {
+      return;
+    }
+    set_wifi_status(Status::Disabled);
+    self.wifi_disabled = true;
+  }
+
+  /// Re-enable WiFi via rfkill. Called before the next fetch cycle so the
+  /// network is available for Strava API calls.
+  pub fn enable_wifi(&mut self) {
+    if !self.wifi_disabled {
+      return;
+    }
+    set_wifi_status(Status::Enabled);
+    self.wifi_disabled = false;
+  }
+
   /// Re-enable peripherals before the next active cycle.
   pub fn set_normal(&mut self) {
+    self.enable_wifi();
     if let Some(lp) = self.low_power
        && !lp
     {
@@ -213,6 +238,7 @@ fn set_usb_status(status: Status) {
 // At runtime we can use `rfkill` to soft-block it without a reboot.
 
 const RFKILL_BLUETOOTH: &str = "bluetooth";
+const RFKILL_WIFI: &str = "wifi";
 
 /// Read whether Bluetooth is currently enabled (not soft-blocked by rfkill).
 pub fn get_bluetooth_status() -> Status {
@@ -254,6 +280,30 @@ fn set_bluetooth_status(status: Status) -> Status {
     Err(e) => {
       log::warn!("rfkill not found: {e}");
       get_bluetooth_status()
+    },
+  }
+}
+
+// -- WiFi --------------------------------------------------------------------
+// Soft-blocking WiFi via rfkill saves significant power when the radio is not
+// needed (between fetch cycles on battery).
+
+fn set_wifi_status(status: Status) {
+  let action = match status {
+    Status::Enabled => "unblock",
+    Status::Disabled => "block",
+  };
+
+  match Command::new("rfkill").args([action, RFKILL_WIFI]).output() {
+    Ok(output) if output.status.success() => {
+      log::info!("WiFi {}", if status == Status::Enabled { "enabled" } else { "disabled" });
+    },
+    Ok(output) => {
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      log::warn!("rfkill {action} wifi failed: {}", stderr.trim());
+    },
+    Err(e) => {
+      log::warn!("rfkill not found: {e}");
     },
   }
 }
