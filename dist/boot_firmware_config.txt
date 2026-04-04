@@ -53,8 +53,8 @@ dtoverlay=dwc2,dr_mode=host
 
 [all]
 enable_uart=1
-# dtoverlay=i2c-rtc,ds3231,wakeup-source
-dtoverlay=i2c-rtc,ds3231
+dtoverlay=i2c-rtc,ds3231,wakeup-source
+# dtoverlay=i2c-rtc,ds3231
 dtoverlay=i2c0
 # dtoverlay=gpio-shutdown
 # dtoverlay=pi3-miniuart-bt

@@ -41,6 +41,26 @@ pub fn try_rtcwake_shutdown(sleep_secs: u64) -> bool {
   }
 }
 
+// 4. Tips to Optimize Raspberry Pi Power Usage#
+//
+// https://www.dotlinux.net/blog/how-to-check-power-consumption-on-raspberry-pi/
+//
+// Once you’ve measured consumption, use these tips to reduce it (critical for
+// battery-powered projects!):
+//
+//     Disable Unused Hardware:
+//         Turn off Wi-Fi/Bluetooth: sudo rfkill block wifi and sudo rfkill
+// block bluetooth.         Disable HDMI: vcgencmd display_power 0 (re-enable
+// with 1).     Underclock the CPU: Lower clock speeds in raspi-config (Advanced
+// Options > Overclock > Select a lower profile).     Use a Lightweight OS:
+// Raspberry Pi OS Lite (no GUI) reduces idle power by ~20–30%.     Limit USB
+// Devices: Use low-power USB drives (e.g., SSDs instead of spinning HDDs) and
+// disconnect unused peripherals.     Enable Power-Saving Modes: Set the CPU
+// governor to powersave (vs. performance):
+//
+//     echo "powersave" | sudo tee
+// /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
 /// Test that the DS3231 INT/SQW pin (GPIO 4, physical pin 7) is pulled low
 /// when a wake alarm fires.
 ///
@@ -122,6 +142,104 @@ pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
       log::debug!("Battery monitor unavailable: {e}");
       None
     },
+  }
+}
+
+#[allow(dead_code)]
+mod refactor {
+  use std::fs;
+  use std::process::Command;
+
+  /// PowerMode for the application / RPi
+  #[derive(PartialEq)]
+  pub enum Mode {
+    /// The RPi runs normally, using all the power it wants Typically good when
+    /// connected to the power supply
+    Normal,
+    /// The RPi is running on battery, and should try to save as much power as
+    /// possible. Note that WiFi will get disabled in this mode
+    LowPower,
+    /// The RPi will halt, and can only be booted again with a power cycle or
+    /// e.g. shorting the RUN pad
+    Halted,
+  }
+
+  pub struct PowerManager {
+    current_mode:  Mode,
+    wifi_disabled: Option<bool>,
+  }
+
+  impl PowerManager {
+    pub fn new(mode: Mode) -> Self {
+      let instance = Self { current_mode:  mode,
+                            wifi_disabled: None, };
+      match instance.current_mode {
+        Mode::Normal => {},
+        Mode::LowPower => todo!(),
+        Mode::Halted => todo!(),
+      }
+      instance
+    }
+
+    /// Disable non-essential peripherals to save power during sleep.
+    /// WiFi is kept alive so the user can SSH in during the linger window;
+    /// call [`disable_wifi`] after the linger period.
+    pub fn set_mode(&mut self, mode: Mode) {
+      if self.current_mode == mode {
+        return;
+      }
+      self.current_mode = mode;
+      todo!();
+    }
+
+    /// Set the DS3231 wake alarm and halt the Pi.
+    /// The DS3231 INT pin (wired to the RUN pad) will reboot
+    /// the Pi when the alarm fires.
+    fn set_rtc_alarm_and_halt(self, sleep_secs: u64) -> Result<(), ()> {
+      // Clear any pending alarm
+      let _ = fs::write("/sys/class/rtc/rtc0/wakealarm", "0");
+
+      // Set alarm
+      let alarm = format!("+{sleep_secs}");
+      match fs::write("/sys/class/rtc/rtc0/wakealarm", &alarm) {
+        Ok(_) => log::info!("RTC alarm set for {sleep_secs}s from now"),
+        Err(e) => {
+          // Don't shut down if we can't set the alarm
+          log::error!("Failed to set RTC alarm: {e}");
+          return Err(());
+        },
+      }
+
+      log::info!("Halting — DS3231 INT -> RUN pad will reboot on alarm");
+
+      // Sync filesystem before halting
+      let sync_result = Command::new("sync").status();
+      match sync_result {
+        Ok(exit_code) => {
+          if !exit_code.success() {
+            log::error!("Failed to sync before shutdown: {exit_code}");
+          }
+        },
+        Err(e) => log::error!("Cannot get exit status for sync before shutdown: {e}"),
+      }
+
+      // Halt
+      let shutdown_result = Command::new("sudo").args(["shutdown", "-h", "now"]).status();
+      match shutdown_result {
+        Ok(exit_code) => {
+          if !exit_code.success() {
+            log::error!("Failed to sync before shutdown: {exit_code}");
+            return Err(());
+          }
+        },
+        Err(e) => {
+          log::error!("Cannot get exit status for sync before shutdown: {e}");
+          return Err(());
+        },
+      }
+
+      Ok(())
+    }
   }
 }
 

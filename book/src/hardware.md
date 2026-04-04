@@ -121,3 +121,6 @@ run for roughly 2-3 days on a single charge, depending on refresh frequency.
 
 - [Waveshare RPi Zero PhotoPainter Wiki](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
 - [Waveshare 7.3" ACeP e-Paper Specs](https://www.waveshare.com/7.3inch-e-paper-hat-f.htm)
+- [RPi boot config](https://www.raspberrypi.com/documentation/computers/config_txt.html)
+- [Raspi_onoff](https://github.com/decodeais/Raspi_onoff)
+- [RPI RTC DS3231](http://www.intellamech.com/RaspberryPi-projects/rpi_RTCds3231)
