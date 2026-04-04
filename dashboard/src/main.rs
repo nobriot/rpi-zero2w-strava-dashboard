@@ -364,7 +364,7 @@ fn fetch_stats(config: &mut Config,
     Ok((stats, avatar)) => Ok((stats, avatar, false)),
     Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
       log::warn!("Network unavailable ({msg}), falling back to cached data");
-      let (stats, avatar) = fetch_stats_from_cache(show_all_sports)?;
+      let (stats, avatar) = fetch_stats_from_cache(&config.display, show_all_sports)?;
       Ok((stats, avatar, true))
     },
     Err(e) => Err(e),
@@ -408,10 +408,12 @@ fn fetch_stats_online(config: &mut Config,
     }
   }
 
+  let display_cfg = &config.display;
   let dashboard = strava::stats::compute(&stats,
                                          &activities,
                                          athlete.firstname.as_deref().unwrap_or("Athlete"),
-                                         show_all_sports);
+                                         show_all_sports,
+                                         |sport| display_cfg.longest_by_for(sport));
 
   Ok((dashboard, avatar))
 }
@@ -419,7 +421,8 @@ fn fetch_stats_online(config: &mut Config,
 /// Offline fallback: load stale cached data and build dashboard from whatever
 /// is available. Scans per-athlete subdirectories and picks the most recently
 /// used one.
-fn fetch_stats_from_cache(show_all_sports: bool)
+fn fetch_stats_from_cache(display_cfg: &display::config::DisplayConfig,
+                          show_all_sports: bool)
                           -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
@@ -439,7 +442,10 @@ fn fetch_stats_from_cache(show_all_sports: bool)
 
   log::info!("Offline fallback: athlete={}, activities={}", firstname, activities.len(),);
 
-  let dashboard = strava::stats::compute(&stats, &activities, firstname, show_all_sports);
+  let dashboard =
+    strava::stats::compute(&stats, &activities, firstname, show_all_sports, |sport| {
+      display_cfg.longest_by_for(sport)
+    });
 
   Ok((dashboard, avatar))
 }

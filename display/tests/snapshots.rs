@@ -125,7 +125,9 @@ fn render_for_entry(entry: &TestEntry) -> (String, RgbImage) {
   let avatar_bytes = fs::read(fixture_dir.join("avatar.img")).ok();
 
   let firstname = athlete.firstname.as_deref().unwrap_or("Athlete");
-  let dashboard = strava::stats::compute(&athlete_stats, &activities, firstname, true);
+  let dashboard = strava::stats::compute(&athlete_stats, &activities, firstname, true, |sport| {
+    config.display.longest_by_for(sport)
+  });
 
   let scale = Scale::new(1);
   let img = render_dashboard(&dashboard,

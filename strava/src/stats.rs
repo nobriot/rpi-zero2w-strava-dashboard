@@ -1,12 +1,16 @@
 use crate::types::{AthleteStats, SummaryActivity};
-use common::{ActivityHighlight, DashboardStats, RunRaceBest, SportSummary, SportType};
+use common::{ActivityHighlight, DashboardStats, LongestBy, RunRaceBest, SportSummary, SportType};
 
 /// Compute dashboard stats from aggregate athlete stats and the list of
 /// individual activities fetched for the current year.
+///
+/// `longest_by_for` determines whether the "longest" activity per sport is
+/// ranked by distance or time.
 pub fn compute(stats: &AthleteStats,
                activities: &[SummaryActivity],
                athlete_first_name: &str,
-               show_all_sports: bool)
+               show_all_sports: bool,
+               longest_by_for: impl Fn(SportType) -> LongestBy)
                -> DashboardStats {
   let all_sport_types = [SportType::Run, SportType::Ride, SportType::Swim];
 
@@ -31,13 +35,17 @@ pub fn compute(stats: &AthleteStats,
                                                    })
                                                    .map(|a| to_highlight(a, sport));
 
-                     let longest = sport_activities.iter()
-                                                   .max_by(|a, b| {
-                                                     a.distance
-                                                      .partial_cmp(&b.distance)
-                                                      .unwrap_or(std::cmp::Ordering::Equal)
-                                                   })
-                                                   .map(|a| to_highlight(a, sport));
+                     let longest =
+                       sport_activities.iter()
+                                       .max_by(|a, b| match longest_by_for(sport) {
+                                         LongestBy::Distance => {
+                                           a.distance
+                                            .partial_cmp(&b.distance)
+                                            .unwrap_or(std::cmp::Ordering::Equal)
+                                         },
+                                         LongestBy::Time => a.moving_time.cmp(&b.moving_time),
+                                       })
+                                       .map(|a| to_highlight(a, sport));
 
                      let (distance_km, moving_time, time_display) = match ytd {
                        Some(t) => {
@@ -273,7 +281,7 @@ mod tests {
 
   fn compute_with(activities: &[SummaryActivity]) -> DashboardStats {
     let stats = crate::types::AthleteStats::default();
-    compute(&stats, activities, "Test", false)
+    compute(&stats, activities, "Test", false, |_| LongestBy::default())
   }
 
   #[test]

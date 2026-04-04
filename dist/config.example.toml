@@ -27,9 +27,11 @@ show_longest_fastest = true
 polyline_thickness = 4
 
 # Yearly distance goals (km). Used for progress bars on the dashboard.
-# Define 1–3 goals. Order matters: first sport is a full-width bar on the top
+# Define 1-3 goals. Order matters: first sport is a full-width bar on the top
 # row. With 3 sports, the 2nd and 3rd share the second row as half-width bars.
 # Available sports: "run", "ride", "swim".
+# Optional: longest_by = "distance" (default) or "time" -- controls whether
+# the "longest" activity highlight is ranked by distance or moving time.
 # Default: run 500km, ride 5000km, swim 30km.
 
 [[display.goals]]
@@ -43,6 +45,7 @@ km = 500.0
 [[display.goals]]
 sport = "swim"
 km = 30.0
+longest_by = "time"
 
 # ── Power management (all optional) ──────────────────────────────────────────
 [power]

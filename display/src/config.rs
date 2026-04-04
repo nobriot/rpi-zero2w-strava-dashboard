@@ -1,4 +1,4 @@
-use common::SportType;
+use common::{LongestBy, SportType};
 use serde::{Deserialize, Serialize};
 
 /// A single sport distance goal for the dashboard progress bars.
@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 pub struct GoalConfig {
   pub sport: SportType,
   pub km:    f64,
+
+  /// Whether the "longest" activity for this sport is ranked by distance
+  /// (default) or by time. Default: "distance".
+  #[serde(default)]
+  pub longest_by: LongestBy,
 }
 
 /// Display and scheduling configuration.
@@ -41,12 +46,15 @@ fn default_show_longest_fastest() -> bool {
   true
 }
 fn default_goals() -> Vec<GoalConfig> {
-  vec![GoalConfig { sport: SportType::Run,
-                    km:    800.0, },
-       GoalConfig { sport: SportType::Ride,
-                    km:    5000.0, },
-       GoalConfig { sport: SportType::Swim,
-                    km:    30.0, },]
+  vec![GoalConfig { sport:      SportType::Run,
+                    km:         800.0,
+                    longest_by: LongestBy::default(), },
+       GoalConfig { sport:      SportType::Ride,
+                    km:         5000.0,
+                    longest_by: LongestBy::default(), },
+       GoalConfig { sport:      SportType::Swim,
+                    km:         30.0,
+                    longest_by: LongestBy::default(), },]
 }
 
 impl Default for DisplayConfig {
@@ -62,5 +70,10 @@ impl DisplayConfig {
   /// Look up the goal distance for a sport, if configured.
   pub fn goal_for(&self, sport: SportType) -> Option<f64> {
     self.goals.iter().find(|g| g.sport == sport).map(|g| g.km)
+  }
+
+  /// Look up how the "longest" activity is ranked for a sport.
+  pub fn longest_by_for(&self, sport: SportType) -> LongestBy {
+    self.goals.iter().find(|g| g.sport == sport).map(|g| g.longest_by).unwrap_or_default()
   }
 }

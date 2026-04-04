@@ -9,6 +9,15 @@ pub enum SportType {
   Swim,
 }
 
+/// How the "longest" activity is determined for a sport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LongestBy {
+  #[default]
+  Distance,
+  Time,
+}
+
 /// Per-sport YTD summary (only present for sports with >= 1 activity this
 /// year).
 #[derive(Debug, Clone)]
