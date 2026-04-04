@@ -212,19 +212,25 @@ fn run() -> Result<()> {
       secs
     };
 
-    // Linger: stay awake briefly so a user can SSH in (capped to sleep duration)
+    // Linger: stay awake so a user can SSH in, but cut short once they log off
     let linger = config.power.linger_secs.min(sleep_duration);
     if linger > 0 {
-      log::info!("Lingering {linger}s for SSH access…");
-      std::thread::sleep(std::time::Duration::from_secs(linger));
+      log::info!("Lingering {linger}s for SSH access...");
+      let mut waited = 0u64;
+      while waited < linger {
+        let chunk = 60.min(linger - waited);
+        std::thread::sleep(std::time::Duration::from_secs(chunk));
+        waited += chunk;
+        if waited < linger && !power::has_ssh_sessions() {
+          log::info!("No SSH sessions -- ending linger early");
+          break;
+        }
+      }
     }
 
     let remaining = sleep_duration.saturating_sub(linger);
 
-    // Linger is over -- disable WiFi to save power during sleep
-    peripherals.disable_wifi();
-
-    // Decide whether to rtcwake-shutdown
+    // Check SSH state for shutdown inhibition
     let ssh_active = power::has_ssh_sessions();
     let ssh_inhibits = config.power.ssh_inhibit_below_percent > 0
                        && ssh_active
@@ -235,16 +241,41 @@ fn run() -> Result<()> {
                battery_pct.map_or("N/A".to_string(), |p| format!("{p}%")),
                config.power.shutdown_after_cycle,);
 
-    if config.power.shutdown_after_cycle
-       && !ssh_inhibits
-       && remaining > 0
-       && power::try_rtcwake_shutdown(remaining)
-    {
-      break;
-    }
+    if ssh_inhibits {
+      // SSH active -- poll every 60s until sessions end, then sleep/shutdown
+      log::info!("SSH inhibiting shutdown -- polling every 60s");
+      let mut waited = 0u64;
+      while waited < remaining {
+        let chunk = 60.min(remaining - waited);
+        std::thread::sleep(std::time::Duration::from_secs(chunk));
+        waited += chunk;
+        if !power::has_ssh_sessions() {
+          log::info!("SSH sessions ended -- proceeding to sleep");
+          peripherals.disable_wifi();
+          let left = remaining.saturating_sub(waited);
+          if left > 0 && config.power.shutdown_after_cycle && power::try_rtcwake_shutdown(left) {
+            return Ok(());
+          }
+          if left > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(left));
+          }
+          break;
+        }
+      }
+    } else {
+      // No SSH -- disable WiFi and sleep/shutdown immediately
+      peripherals.disable_wifi();
 
-    if remaining > 0 {
-      std::thread::sleep(std::time::Duration::from_secs(remaining));
+      if config.power.shutdown_after_cycle
+         && remaining > 0
+         && power::try_rtcwake_shutdown(remaining)
+      {
+        break;
+      }
+
+      if remaining > 0 {
+        std::thread::sleep(std::time::Duration::from_secs(remaining));
+      }
     }
   }
 
