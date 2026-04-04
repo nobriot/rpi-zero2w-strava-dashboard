@@ -2227,6 +2227,7 @@ dependencies = [
  "env_logger",
  "image",
  "log",
+ "rppal",
  "serde",
  "strava",
  "thiserror 2.0.18",

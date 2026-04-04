@@ -39,7 +39,7 @@ while true; do
   # Try to get uptime + battery from the Pi via SSH, fall back to ping
   uptime_info=""
   battery=""
-  if ssh -o ConnectTimeout=5 -o BatchMode=yes pi@"$PI_HOST" "uptime -s" 2>/dev/null; then
+  if ssh -o ConnectTimeout=5 -o BatchMode=yes pi@"$PI_HOST" "uptime -s" &>/dev/null; then
     uptime_info=$(ssh -o ConnectTimeout=5 -o BatchMode=yes pi@"$PI_HOST" "uptime -s" 2>/dev/null || true)
     battery=$(ssh -o ConnectTimeout=5 -o BatchMode=yes pi@"$PI_HOST" "$read_battery_cmd" 2>/dev/null || true)
     new_state="awake"
@@ -78,12 +78,12 @@ while true; do
 
   STATE="$new_state"
 
-  # Print battery info when available
-  if [ -n "$battery" ]; then
-    echo "[$ts] $new_state | battery: $battery"
-  else
-    echo "[$ts] $new_state"
-  fi
+  # # Print battery info when available
+  # if [ -n "$battery" ]; then
+  #   echo "[$ts] $new_state | battery: $battery"
+  # else
+  #   echo "[$ts] $new_state"
+  # fi
 
   # Log to CSV
   echo "$ts,$new_state,$transition,$uptime_info,$battery" >> "$LOGFILE"

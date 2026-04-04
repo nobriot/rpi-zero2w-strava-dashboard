@@ -7,6 +7,7 @@ mod errors;
 mod firmware;
 mod power;
 
+use crate::power::test_rtc_int_pin;
 use args::Args;
 use chrono::{Datelike, Duration, Local, NaiveDate, Timelike, Utc};
 use config::Config;
@@ -121,6 +122,15 @@ fn run() -> Result<()> {
   let mut matches = Args::command().styles(STYLES).term_width(80).get_matches();
   let args =
     Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
+
+  // Quick start up test
+  let rtc_test_result = test_rtc_int_pin();
+  match rtc_test_result {
+    Ok(success) => log::info!("RTC Wake Test result: {success}"),
+    Err(e) => {
+      log::error!("Error testing for RTC Wake: {e}")
+    },
+  }
 
   if args.auth {
     return run_auth(args.config.as_ref());
