@@ -350,6 +350,7 @@ fn draw_sport_bars(img: &mut RgbImage,
                       s.f(16.0),
                       s.f(16.0),
                       s.f(22.0),
+                      true,
                       y,
                       s);
         y += layout.bar_section_h;
@@ -370,6 +371,7 @@ fn draw_sport_bars(img: &mut RgbImage,
                     s.f(16.0),
                     s.f(16.0),
                     s.f(22.0),
+                    true,
                     y,
                     s);
       y += layout.bar_section_h;
@@ -387,10 +389,11 @@ fn draw_sport_bars(img: &mut RgbImage,
                     layout,
                     s.i(MARGIN),
                     half_w,
+                    s.f(18.0),
                     s.f(16.0),
-                    s.f(14.0),
-                    s.f(14.0),
-                    s.f(20.0),
+                    s.f(16.0),
+                    s.f(22.0),
+                    false,
                     y,
                     s);
       draw_goal_bar(img,
@@ -402,10 +405,11 @@ fn draw_sport_bars(img: &mut RgbImage,
                     layout,
                     right_x,
                     half_w,
+                    s.f(18.0),
                     s.f(16.0),
-                    s.f(14.0),
-                    s.f(14.0),
-                    s.f(20.0),
+                    s.f(16.0),
+                    s.f(22.0),
+                    false,
                     y,
                     s);
       y += layout.bar_section_h;
@@ -429,6 +433,7 @@ fn draw_goal_bar(img: &mut RgbImage,
                  center_font_sz: f32,
                  goal_font_sz: f32,
                  flag_font_sz: f32,
+                 show_label: bool,
                  y: i32,
                  s: Scale) {
   let sport = goal_cfg.sport;
@@ -444,9 +449,12 @@ fn draw_goal_bar(img: &mut RgbImage,
   // Sport icon
   icons::draw_sport_icon(img, x as u32, (y + s.i(1)) as u32, sport, BLACK, s.factor());
 
-  // Left: "RUN 234km"
-  let label = sport_label(sport);
-  let left_text = format!("{}  {:.0}km", label, ytd_km);
+  // Left: "RUN 234km" (full-width) or "234km" (half-width)
+  let left_text = if show_label {
+    format!("{}  {:.0}km", sport_label(sport), ytd_km)
+  } else {
+    format!("{:.0}km", ytd_km)
+  };
   let left_scale = PxScale::from(left_font_sz);
   draw_text_mut(img,
                 BLACK,
