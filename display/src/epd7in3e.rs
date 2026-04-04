@@ -180,11 +180,6 @@ impl Epd7in3e {
     self.send_command(0x04)?;
     self.wait_busy("turn_on_display: POWER_ON")?;
 
-    // Booster re-setting
-    log::info!("turn_on_display: sending booster setting (0x06)");
-    self.send_command(0x06)?;
-    self.send_data(&[0x6F, 0x1F, 0x17, 0x49])?;
-
     // DISPLAY_REFRESH
     log::info!("turn_on_display: sending DISPLAY_REFRESH (0x12) — expecting ~30s wait");
     self.send_command(0x12)?;

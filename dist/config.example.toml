@@ -37,15 +37,17 @@ polyline_thickness = 4
 [[display.goals]]
 sport = "ride"
 km = 5000.0
+longest_by = "time"
 
 [[display.goals]]
 sport = "run"
 km = 500.0
+longest_by = "distance"
 
 [[display.goals]]
 sport = "swim"
 km = 30.0
-longest_by = "time"
+longest_by = "distance"
 
 # ── Power management (all optional) ──────────────────────────────────────────
 [power]
