@@ -172,6 +172,14 @@ impl Peripherals {
   }
 }
 
+impl Drop for Peripherals {
+  fn drop(&mut self) {
+    if self.wifi_disabled {
+      set_wifi_status(Status::Enabled);
+    }
+  }
+}
+
 /// Whether a peripheral is currently enabled or disabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
