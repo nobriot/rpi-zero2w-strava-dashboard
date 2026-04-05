@@ -187,7 +187,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
                           battery: Option<&BatteryStatus>,
                           is_offline: bool,
                           s: Scale) {
-  let bat_pct = battery.map(|b| b.percentage).unwrap_or(100);
+  let bat_pct = battery.map(|b| b.percentage()).unwrap_or(100);
   let bat_fill = bat_pct as f32 / 100.0;
   let bat_text = format!("{}%", bat_pct);
   let text_scale = s.px(16.0);

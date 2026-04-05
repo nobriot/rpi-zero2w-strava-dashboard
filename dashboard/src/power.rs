@@ -132,10 +132,7 @@ pub fn has_ssh_sessions() -> bool {
 pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
   match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
     Ok(status) => {
-      log::info!("Battery: {}% ({:.2}V, {})",
-                 status.percentage,
-                 status.voltage,
-                 if status.is_charging { "charging" } else { "discharging" });
+      log::info!("Battery: {:?}", status);
       Some(status)
     },
     Err(e) => {

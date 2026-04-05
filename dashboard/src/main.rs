@@ -194,8 +194,8 @@ fn run() -> Result<()> {
 
     // Fresh battery read for power decision
     let battery = power::read_battery();
-    let on_power = battery.as_ref().is_none_or(|b| b.is_charging);
-    let battery_pct = battery.as_ref().map(|b| b.percentage);
+    let on_power = battery.as_ref().is_none_or(|b| b.is_charging());
+    let battery_pct = battery.as_ref().map(|b| b.percentage());
 
     // On external power (or no battery sensor): short interval, ignore quiet
     // hours, no shutdown. This also covers dev machines without an INA219.
@@ -299,10 +299,7 @@ fn try_cycle(config: &mut Config, args: &Args) -> Result<()> {
   // Read battery status (non-fatal if unavailable)
   let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
     Ok(status) => {
-      log::info!("Battery: {}% ({:.2}V, {})",
-                 status.percentage,
-                 status.voltage,
-                 if status.is_charging { "charging" } else { "discharging" });
+      log::info!("Battery: {status:?}");
       Some(status)
     },
     Err(e) => {
