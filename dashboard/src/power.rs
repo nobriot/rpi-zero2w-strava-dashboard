@@ -1,5 +1,4 @@
 use chrono::Utc;
-use rppal::gpio::Gpio;
 use std::fs;
 use std::process::Command;
 
@@ -39,68 +38,6 @@ pub fn try_rtcwake_shutdown(sleep_secs: u64) -> bool {
       false
     },
   }
-}
-
-// 4. Tips to Optimize Raspberry Pi Power Usage#
-//
-// https://www.dotlinux.net/blog/how-to-check-power-consumption-on-raspberry-pi/
-//
-// Once you’ve measured consumption, use these tips to reduce it (critical for
-// battery-powered projects!):
-//
-//     Disable Unused Hardware:
-//         Turn off Wi-Fi/Bluetooth: sudo rfkill block wifi and sudo rfkill
-// block bluetooth.         Disable HDMI: vcgencmd display_power 0 (re-enable
-// with 1).     Underclock the CPU: Lower clock speeds in raspi-config (Advanced
-// Options > Overclock > Select a lower profile).     Use a Lightweight OS:
-// Raspberry Pi OS Lite (no GUI) reduces idle power by ~20–30%.     Limit USB
-// Devices: Use low-power USB drives (e.g., SSDs instead of spinning HDDs) and
-// disconnect unused peripherals.     Enable Power-Saving Modes: Set the CPU
-// governor to powersave (vs. performance):
-//
-//     echo "powersave" | sudo tee
-// /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-
-/// Test that the DS3231 INT/SQW pin (GPIO 4, physical pin 7) is pulled low
-/// when a wake alarm fires.
-///
-/// Steps:
-///   1. Read the current GPIO 4 level (should be high = no alarm pending).
-///   2. Set an RTC alarm 10 seconds from now via
-///      `/sys/class/rtc/rtc0/wakealarm`.
-///   3. Wait 11 seconds for the alarm to fire.
-///   4. Read GPIO 4 again — it should be low if the INT pin is wired correctly.
-///
-/// Returns `Ok(true)` if the pin went low after the alarm, `Ok(false)` if it
-/// stayed high (wiring or DS3231 issue), or `Err` if GPIO/RTC access failed.
-pub fn test_rtc_int_pin() -> Result<bool, String> {
-  const GPIO_INT_PIN: u8 = 4;
-  const ALARM_SECS: u64 = 10;
-
-  let gpio = Gpio::new().map_err(|e| format!("GPIO init failed: {e}"))?;
-  let pin = gpio.get(GPIO_INT_PIN)
-                .map_err(|e| format!("Failed to get GPIO {GPIO_INT_PIN}: {e}"))?
-                .into_input_pullup();
-
-  let before = pin.read();
-  log::info!("test_rtc_int_pin: GPIO {GPIO_INT_PIN} before alarm = {:?}", before);
-
-  // Clear any pending alarm then set a new one
-  fs::write("/sys/class/rtc/rtc0/wakealarm", "0")
-    .map_err(|e| format!("Failed to clear RTC alarm: {e}"))?;
-  fs::write("/sys/class/rtc/rtc0/wakealarm", format!("+{ALARM_SECS}"))
-    .map_err(|e| format!("Failed to set RTC alarm: {e}"))?;
-  log::info!("test_rtc_int_pin: RTC alarm set for {ALARM_SECS}s from now — waiting...");
-
-  std::thread::sleep(std::time::Duration::from_secs(ALARM_SECS + 1));
-
-  let after = pin.read();
-  log::info!("test_rtc_int_pin: GPIO {GPIO_INT_PIN} after alarm = {:?}", after);
-
-  // Clear alarm so it does not interfere with normal operation
-  let _ = fs::write("/sys/class/rtc/rtc0/wakealarm", "0");
-
-  Ok(after == rppal::gpio::Level::Low)
 }
 
 /// Check whether any SSH (pseudo-terminal) sessions are currently active.

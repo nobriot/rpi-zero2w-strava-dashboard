@@ -124,3 +124,4 @@ run for roughly 2-3 days on a single charge, depending on refresh frequency.
 - [RPi boot config](https://www.raspberrypi.com/documentation/computers/config_txt.html)
 - [Raspi_onoff](https://github.com/decodeais/Raspi_onoff)
 - [RPI RTC DS3231](http://www.intellamech.com/RaspberryPi-projects/rpi_RTCds3231)
+- [raspberry pi firmware](https://github.com/raspberrypi/firmware/blob/master/boot/overlays/README)

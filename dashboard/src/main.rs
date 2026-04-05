@@ -3,12 +3,11 @@ use clap::{CommandFactory, FromArgMatches};
 
 mod args;
 mod config;
+mod ds3231;
 mod errors;
 mod firmware;
 mod ina219;
 mod power;
-
-use crate::power::test_rtc_int_pin;
 use args::Args;
 use chrono::{Datelike, Duration, Local, NaiveDate, Timelike, Utc};
 use config::Config;
@@ -124,14 +123,8 @@ fn run() -> Result<()> {
   let args =
     Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
 
-  // Quick start up test
-  let rtc_test_result = test_rtc_int_pin();
-  match rtc_test_result {
-    Ok(success) => log::info!("RTC Wake Test result: {success}"),
-    Err(e) => {
-      log::error!("Error testing for RTC Wake: {e}")
-    },
-  }
+  // Clear any pending DS3231 alarm from a previous rtcwake cycle
+  ds3231::clear_alarm_if_pending();
 
   if args.auth {
     return run_auth(args.config.as_ref());
