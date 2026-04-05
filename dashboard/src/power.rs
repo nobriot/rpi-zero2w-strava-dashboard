@@ -84,8 +84,11 @@ mod refactor {
   use std::fs;
   use std::process::Command;
 
+  const USB_BIND: &str = "/sys/bus/usb/drivers/usb/bind";
+  const USB_UNBIND: &str = "/sys/bus/usb/drivers/usb/unbind";
+
   /// PowerMode for the application / RPi
-  #[derive(PartialEq)]
+  #[derive(PartialEq, Copy, Clone)]
   pub enum Mode {
     /// The RPi runs normally, using all the power it wants Typically good when
     /// connected to the power supply
@@ -99,20 +102,29 @@ mod refactor {
   }
 
   pub struct PowerManager {
-    current_mode:  Mode,
-    wifi_disabled: Option<bool>,
+    current_mode:       Mode,
+    wifi_disabled:      Option<bool>,
+    bluetooth_disabled: Option<bool>,
+    usb_disabled:       Option<bool>,
   }
 
   impl PowerManager {
     pub fn new(mode: Mode) -> Self {
-      let instance = Self { current_mode:  mode,
-                            wifi_disabled: None, };
+      let mut instance = Self { current_mode:       mode,
+                                wifi_disabled:      None,
+                                bluetooth_disabled: None,
+                                usb_disabled:       None, };
       match instance.current_mode {
-        Mode::Normal => {},
-        Mode::LowPower => todo!(),
-        Mode::Halted => todo!(),
+        Mode::Normal => instance.set_normal_mode(),
+        Mode::LowPower => instance.set_low_power_mode(false),
+        Mode::Halted => instance.set_halted_mode(0).expect("FIXME"),
       }
       instance
+    }
+
+    /// Gets the current PowerManager mode
+    pub fn get_mode(&self) -> Mode {
+      self.current_mode
     }
 
     /// Disable non-essential peripherals to save power during sleep.
@@ -126,10 +138,31 @@ mod refactor {
       todo!();
     }
 
+    /// Re-enables everything
+    fn set_normal_mode(&mut self) {
+      self.current_mode = Mode::Normal;
+
+      self.enable_wifi();
+      self.enable_bluetooth();
+      self.enable_usb_peripherals();
+    }
+
+    /// Disable everything that's not required
+    fn set_low_power_mode(&mut self, disable_wifi: bool) {
+      if disable_wifi {
+        self.disable_wifi();
+      } else {
+        self.enable_wifi();
+      }
+      self.disable_bluetooth();
+      self.disable_usb_peripherals();
+    }
+
+    /// Shuts down the RPi.
     /// Set the DS3231 wake alarm and halt the Pi.
     /// The DS3231 INT pin (wired to the RUN pad) will reboot
     /// the Pi when the alarm fires.
-    fn set_rtc_alarm_and_halt(self, sleep_secs: u64) -> Result<(), ()> {
+    fn set_halted_mode(&self, sleep_secs: u64) -> Result<(), ()> {
       // Clear any pending alarm
       let _ = fs::write("/sys/class/rtc/rtc0/wakealarm", "0");
 
@@ -173,6 +206,156 @@ mod refactor {
       }
 
       Ok(())
+    }
+
+    /// Disables WiFi to save power. Use carefully.
+    fn disable_wifi(&mut self) {
+      if let Some(true) = self.wifi_disabled {
+        return;
+      }
+      match Command::new("rfkill").args(["block", "wifi"]).output() {
+        Ok(output) if output.status.success() => {
+          log::info!("WiFi disabled");
+          self.wifi_disabled = Some(true);
+        },
+        Ok(output) => {
+          let stderr = String::from_utf8_lossy(&output.stderr);
+          log::warn!("rfkill block wifi failed: {}", stderr.trim());
+        },
+        Err(e) => {
+          log::warn!("rfkill not found: {e}");
+        },
+      }
+    }
+
+    /// enables WiFi.
+    fn enable_wifi(&mut self) {
+      if let Some(false) = self.wifi_disabled {
+        return;
+      }
+      match Command::new("rfkill").args(["unblock", "wifi"]).output() {
+        Ok(output) if output.status.success() => {
+          log::info!("WiFi enabled");
+          self.wifi_disabled = Some(false);
+        },
+        Ok(output) => {
+          let stderr = String::from_utf8_lossy(&output.stderr);
+          log::error!("rfkill unblock wifi failed: {}", stderr.trim());
+        },
+        Err(e) => {
+          log::warn!("rfkill not found: {e}");
+        },
+      }
+    }
+
+    /// Disables bluetooth to save power.
+    /// The recommended way is to add  `dtoverlay=disable-bt` to
+    /// /boot/firmware/config.txt and reboot. At runtime we can use `rfkill`
+    /// to soft-block it without a reboot.
+    fn disable_bluetooth(&mut self) {
+      if let Some(true) = self.bluetooth_disabled {
+        return;
+      }
+      match Command::new("rfkill").args(["block", "bluetooth"]).output() {
+        Ok(output) if output.status.success() => {
+          log::info!("Bluetooth disabled");
+          self.bluetooth_disabled = Some(true);
+        },
+        Ok(output) => {
+          let stderr = String::from_utf8_lossy(&output.stderr);
+          log::warn!("rfkill block bluetooth failed: {}", stderr.trim());
+        },
+        Err(e) => {
+          log::warn!("rfkill not found: {e}");
+        },
+      }
+    }
+
+    /// enables bluetooth.
+    fn enable_bluetooth(&mut self) {
+      if let Some(false) = self.bluetooth_disabled {
+        return;
+      }
+      match Command::new("rfkill").args(["unblock", "bluetooth"]).output() {
+        Ok(output) if output.status.success() => {
+          log::info!("Bluetooth enabled");
+          self.bluetooth_disabled = Some(false);
+        },
+        Ok(output) => {
+          let stderr = String::from_utf8_lossy(&output.stderr);
+          log::error!("rfkill unblock bluetooth failed: {}", stderr.trim());
+        },
+        Err(e) => {
+          log::warn!("rfkill not found: {e}");
+        },
+      }
+    }
+
+    /// Disables USB peripherals
+    fn disable_usb_peripherals(&mut self) {
+      if let Some(true) = self.usb_disabled {
+        return;
+      }
+
+      for name in &Self::discover_usb_devices_names() {
+        match fs::write(USB_UNBIND, name) {
+          Ok(()) => {
+            log::debug!("USB device {name} disabled");
+          },
+          Err(e) => {
+            // ENODEV / EBUSY are expected if already in the target state
+            // We should not get there with our state tracking
+            log::warn!("Failed to write {name} to USB_UNBIND path: {e}");
+          },
+        }
+      }
+
+      log::info!("USB peripherals disabled");
+      self.usb_disabled = Some(true);
+    }
+
+    fn enable_usb_peripherals(&mut self) {
+      if let Some(false) = self.usb_disabled {
+        return;
+      }
+
+      for name in &Self::discover_usb_devices_names() {
+        match fs::write(USB_BIND, name) {
+          Ok(()) => {
+            log::debug!("USB device {name} enabled");
+          },
+          Err(e) => {
+            // ENODEV / EBUSY are expected if already in the target state
+            // We should not get there with our state tracking
+            log::warn!("Failed to write {name} to USB_BIND path: {e}");
+          },
+        }
+      }
+
+      log::info!("USB peripherals enabled");
+      self.usb_disabled = Some(false);
+    }
+
+    /// Discover USB device names from /sys/bus/usb/devices/.
+    /// Returns entries like "1-0:1.0", "usb1", etc.
+    fn discover_usb_devices_names() -> Vec<String> {
+      let devices_dir = std::path::Path::new("/sys/bus/usb/devices");
+      let Ok(entries) = fs::read_dir(devices_dir) else {
+        return Vec::new();
+      };
+      entries.filter_map(|e| {
+               let entry = e.ok()?;
+               let name = entry.file_name().into_string().ok()?;
+               // Only include entries that have a uevent file
+               if entry.path().join("uevent").exists() { Some(name) } else { None }
+             })
+             .collect()
+    }
+  }
+
+  impl Drop for PowerManager {
+    fn drop(&mut self) {
+      self.set_mode(Mode::Normal);
     }
   }
 }
