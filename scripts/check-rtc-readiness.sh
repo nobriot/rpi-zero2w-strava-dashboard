@@ -21,7 +21,7 @@ echo "1. I2C bus scan"
 if command -v i2cdetect &>/dev/null; then
   found_bus=""
   for bus in 0 1; do
-    if i2cdetect -y "$bus" 2>/dev/null | grep -q "68"; then
+    if i2cdetect -f -y "$bus" 2>/dev/null | grep -q "68"; then
       found_bus="$bus"
       break
     fi

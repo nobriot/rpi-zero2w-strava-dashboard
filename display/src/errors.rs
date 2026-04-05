@@ -8,9 +8,6 @@ pub enum DisplayError {
   #[error("SPI error: {0}")]
   Spi(String),
 
-  #[error("I2C error: {0}")]
-  I2c(String),
-
   #[error("Display busy timeout")]
   BusyTimeout,
 

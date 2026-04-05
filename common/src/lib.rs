@@ -75,6 +75,42 @@ pub struct DashboardStats {
   pub show_all_sports:        bool,
 }
 
+/// Battery status read from a UPS monitor (e.g. INA219).
+/// Pure data -- the hardware driver lives in the dashboard crate.
+#[derive(Debug, Clone)]
+pub struct BatteryStatus {
+  /// Voltage in Volts
+  pub voltage:    f32,
+  /// Current in mA (positive = charging)
+  pub current_ma: f32,
+  /// Power in Watts
+  pub power:      f32,
+}
+
+impl BatteryStatus {
+  pub fn is_charging(&self) -> bool {
+    self.current_ma > 0.0
+  }
+
+  /// Estimated battery percentage (3.0V = 0%, 4.2V = 100%).
+  pub fn percentage(&self) -> u8 {
+    let pct = (self.voltage - 3.0) / 1.2 * 100.0;
+    pct.clamp(0.0, 100.0) as u8
+  }
+}
+
+impl std::fmt::Display for BatteryStatus {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f,
+           "{}% ({:.2}V - {}mA - {}W) {}",
+           self.percentage(),
+           self.voltage,
+           self.current_ma,
+           self.power,
+           if self.is_charging() { "charging" } else { "discharging" })
+  }
+}
+
 /// A single activity highlighted for a specific reason (fastest, longest,
 /// last).
 #[derive(Debug, Clone)]

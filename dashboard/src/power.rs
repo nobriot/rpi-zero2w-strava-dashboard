@@ -129,10 +129,10 @@ pub fn has_ssh_sessions() -> bool {
 /// Returns `None` if the sensor is unavailable (e.g. no UPS board, dev
 /// machine). This is non-fatal — the caller uses `None` to mean "on
 /// external power / no battery".
-pub fn read_battery() -> Option<display::ina219::BatteryStatus> {
-  match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
+pub fn read_battery() -> Option<common::BatteryStatus> {
+  match crate::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
     Ok(status) => {
-      log::info!("Battery: {:?}", status);
+      log::info!("Battery: {status}");
       Some(status)
     },
     Err(e) => {

@@ -1,9 +1,8 @@
 use crate::config::{DisplayConfig, GoalConfig};
 use crate::icons;
-use crate::ina219::BatteryStatus;
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
-use common::{DashboardStats, SportType};
+use common::{BatteryStatus, DashboardStats, SportType};
 use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
 use imageproc::rect::Rect;

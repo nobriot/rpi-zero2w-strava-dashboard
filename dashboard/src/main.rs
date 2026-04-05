@@ -5,6 +5,7 @@ mod args;
 mod config;
 mod errors;
 mod firmware;
+mod ina219;
 mod power;
 
 use crate::power::test_rtc_int_pin;
@@ -297,9 +298,9 @@ fn try_cycle(config: &mut Config, args: &Args) -> Result<()> {
   let (stats, avatar, is_offline) = fetch_stats(config, args.show_all_sports)?;
 
   // Read battery status (non-fatal if unavailable)
-  let battery = match display::ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
+  let battery = match ina219::Ina219::new().and_then(|mut ina| ina.read_status()) {
     Ok(status) => {
-      log::info!("Battery: {status:?}");
+      log::info!("Battery: {status}");
       Some(status)
     },
     Err(e) => {

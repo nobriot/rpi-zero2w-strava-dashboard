@@ -180,5 +180,4 @@ Requires Rust edition 2024 (rust-version 1.93+).
 ## Credits
 
 Totally inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter).
-
 See also: [Statistics-for-Strava](https://github.com/robiningelbrecht/statistics-for-strava).
