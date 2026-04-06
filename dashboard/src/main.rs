@@ -272,9 +272,7 @@ fn run() -> Result<()> {
         }
       }
     } else {
-      // No SSH -- disable WiFi and sleep/shutdown immediately
-      power_mgr.disable_wifi();
-
+      // See if we will shutdown or sleep now
       if let Some(pin) = config.power.tpl5110_done_pin
          && power_mgr.tpl5110_shutdown(pin)
       {
@@ -284,6 +282,10 @@ fn run() -> Result<()> {
       if config.power.shutdown_after_cycle && remaining > 0 && power_mgr.shutdown(remaining) {
         break;
       }
+
+      // No SSH, but still staying powered on on battery
+      // disable WiFi and stay idle until the next cycle
+      power_mgr.disable_wifi();
 
       if remaining > 0 {
         std::thread::sleep(std::time::Duration::from_secs(remaining));

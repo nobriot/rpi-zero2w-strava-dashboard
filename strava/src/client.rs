@@ -13,6 +13,12 @@ pub struct Client {
 }
 
 impl Client {
+  /// Query activities at most every 3 hours
+  const ACTIVITIES_CACHE_TIME: u64 = 3600 * 3;
+  /// Keep athele cache for 1 week before quering again
+  const ATHELE_CACHE_TIME: u64 = 3600 * 24 * 7;
+  /// Refresh generic stats at most once per day
+  const STATS_CACHE_TIME: u64 = 3600 * 24;
   const STRAVA_API_BASE_URL: &str = "https://www.strava.com/api/v3/";
   const STRAVA_TOKEN_URL: &str = "https://www.strava.com/oauth/token";
 
@@ -132,7 +138,7 @@ impl Client {
 
     // Switch to per-athlete dir, then save athlete there
     self.cache = self.cache.for_athlete(athlete.id);
-    self.cache.save("athlete", &athlete, Some(3600 * 24 * 7));
+    self.cache.save("athlete", &athlete, Some(Self::ATHELE_CACHE_TIME));
     Ok(athlete)
   }
 
@@ -169,7 +175,7 @@ impl Client {
     // dbg!(&stats);
     let stats = stats.map_err(|_| StravaError::StravaApiResponseDeserializationError(body))?;
 
-    self.cache.save("stats", &stats, None);
+    self.cache.save("stats", &stats, Some(Self::STATS_CACHE_TIME));
     Ok(stats)
   }
 
@@ -212,7 +218,7 @@ impl Client {
       page += 1;
     }
 
-    self.cache.save("activities", &all_activities, Some(3 * 3600));
+    self.cache.save("activities", &all_activities, Some(Self::ACTIVITIES_CACHE_TIME));
 
     // Sort newest-first (the API with `after` returns oldest-first)
     all_activities.sort_by(|a, b| {

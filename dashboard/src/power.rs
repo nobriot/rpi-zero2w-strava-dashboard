@@ -125,6 +125,8 @@ impl PowerManager {
     }
     rfkill("unblock", "wifi");
     self.wifi_blocked = false;
+    // Wait a few seconds for the connectivity to be available
+    std::thread::sleep(std::time::Duration::from_secs(5));
   }
 
   /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
