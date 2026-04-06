@@ -76,7 +76,7 @@ Displays your Strava stats on a 7.3" 6-color e-paper display:
 ### 1. Prepare the RPi SD Card
 
 Those displays come with **Raspberry Pi OS** pre-flashed, and some repos
-configured. The RPI has the default password and SSH enabled.
+cloned on the home directory. The RPI has the default password and SSH enabled.
 
 Those bandits use NetworkManager
 

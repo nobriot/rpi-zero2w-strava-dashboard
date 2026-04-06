@@ -1,6 +1,3 @@
-use clap::builder::styling;
-use clap::{CommandFactory, FromArgMatches};
-
 mod args;
 mod config;
 mod ds3231;
@@ -8,22 +5,15 @@ mod errors;
 mod firmware;
 mod ina219;
 mod power;
+mod schedule;
 use args::Args;
-use chrono::{Datelike, Duration, Local, NaiveDate, Timelike, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use config::Config;
 use errors::{DashError, Result};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
-const STYLES: styling::Styles =
-  styling::Styles::styled().header(styling::AnsiColor::Green.on_default().bold())
-                           .usage(styling::AnsiColor::Green.on_default().bold())
-                           .literal(styling::AnsiColor::Blue.on_default().bold())
-                           .placeholder(styling::AnsiColor::Cyan.on_default());
-
 static PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
-
-const CYCLE_SECONDS_ON_POWER: u64 = 600;
 
 fn main() {
   let mut log_builder =
@@ -118,10 +108,7 @@ fn prompt(label: &str) -> Result<String> {
 }
 
 fn run() -> Result<()> {
-  // Arguments
-  let mut matches = Args::command().styles(STYLES).term_width(80).get_matches();
-  let args =
-    Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
+  let args = Args::try_parse()?;
 
   // Clear any pending DS3231 alarm from a previous rtcwake cycle
   ds3231::clear_alarm_if_pending();
@@ -154,146 +141,172 @@ fn run() -> Result<()> {
   let mut power_mgr = power::PowerManager::new();
 
   loop {
-    // Re-enable WiFi if it was disabled during the previous sleep
     power_mgr.enable_wifi();
 
-    match try_cycle(&mut config, &args) {
-      Ok(()) => {},
-      Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
-        // Token refresh already attempted by the client.
-        // If we still get Unauthorized, the refresh token is invalid — need full OAuth.
-        log::warn!("Unauthorized after auto-refresh — attempting full OAuth re-authorization");
-        eprintln!("\nRefresh token invalid. Starting OAuth authorization flow...");
+    // Read battery early so we can skip the cycle during quiet hours
+    let battery = power::read_battery();
 
-        let token_response = strava::oauth::run_auth_flow(&config.strava)?;
-        config.strava.set_refresh_token(token_response.refresh_token);
-        config.save().map_err(DashError::Config)?;
-
-        if let Err(e) = try_cycle(&mut config, &args) {
-          eprintln!("Error after re-authorization: {e:?}");
-        }
-      },
-      Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
-        log::warn!("Network unavailable: {msg}");
-        eprintln!("Network unavailable — will retry next cycle");
-      },
-      Err(e) => {
-        eprintln!("Error during cycle: {e:?}");
-      },
+    if schedule::should_skip_cycle(&config.power, battery.as_ref()) {
+      log::info!("Quiet hours with TPL5110 -- skipping cycle");
+    } else {
+      run_cycle(&mut config, &args, &mut power_mgr)?;
     }
 
     if args.once {
       break;
     }
 
-    // Fresh battery read for power decision
+    // Re-read battery (cycle may have taken a while)
     let battery = power::read_battery();
-    let on_power = battery.as_ref().is_none_or(|b| b.is_charging());
-    let battery_pct = battery.as_ref().map(|b| b.percentage());
+    let plan = schedule::plan(&config.power, battery.as_ref());
 
-    // On external power (or no battery sensor): short interval, ignore quiet
-    // hours, no shutdown. This also covers dev machines without an INA219.
-    if on_power {
-      power_mgr.set_normal();
-      let secs = CYCLE_SECONDS_ON_POWER;
-      log::info!("On power -- sleeping {secs}s before next cycle");
-      std::thread::sleep(std::time::Duration::from_secs(secs));
-      continue;
-    } else {
-      power_mgr.set_low_power();
-    }
-
-    // Battery mode: respect quiet hours
-    let sleep_duration = if is_quiet_time(&config.power) {
-      let secs = seconds_until_quiet_end(&config.power);
-      log::info!("Quiet hours ({:02}:00-{:02}:00) -- sleeping {secs}s until wake",
-                 config.power.quiet_hours.start,
-                 config.power.quiet_hours.end,);
-      secs
-    } else {
-      let secs = seconds_until_next_slot(&config.power, config.power.sleep_interval_secs);
-      log::info!("Battery mode -- sleeping {secs}s (next grid slot)");
-      secs
-    };
-
-    // Linger: stay awake so a user can SSH in, but cut short once they log off
-    let linger = config.power.linger_secs.min(sleep_duration);
-    if linger > 0 {
-      log::info!("Lingering {linger}s for SSH access...");
-      let mut waited = 0u64;
-      while waited < linger {
-        let chunk = 60.min(linger - waited);
-        std::thread::sleep(std::time::Duration::from_secs(chunk));
-        waited += chunk;
-        if waited < linger && !power::has_ssh_sessions() {
-          log::info!("No SSH sessions -- ending linger early");
+    match plan {
+      schedule::SleepPlan::OnPower { sleep_secs } => {
+        power_mgr.set_normal();
+        log::info!("On power -- sleeping {sleep_secs}s before next cycle");
+        std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
+      },
+      schedule::SleepPlan::Battery { sleep_secs, linger_secs, .. } => {
+        power_mgr.set_low_power();
+        let lingered = linger(linger_secs);
+        let remaining = sleep_secs.saturating_sub(lingered);
+        let battery_pct = battery.as_ref().map(|b| b.percentage());
+        if shutdown_or_sleep(&config.power, &mut power_mgr, remaining, battery_pct) {
           break;
         }
-      }
-    }
-
-    let remaining = sleep_duration.saturating_sub(linger);
-
-    // Check SSH state for shutdown inhibition
-    let ssh_active = power::has_ssh_sessions();
-    let ssh_inhibits = config.power.ssh_inhibit_below_percent > 0
-                       && ssh_active
-                       && battery_pct.is_none_or(|p| p > config.power.ssh_inhibit_below_percent);
-
-    log::info!("Power: battery={}, ssh={ssh_active}, ssh_inhibits={ssh_inhibits}, \
-                shutdown_after_cycle={}",
-               battery_pct.map_or("N/A".to_string(), |p| format!("{p}%")),
-               config.power.shutdown_after_cycle,);
-
-    if ssh_inhibits {
-      // SSH active -- poll every 60s until sessions end, then sleep/shutdown
-      log::info!("SSH inhibiting shutdown -- polling every 60s");
-      let mut waited = 0u64;
-      while waited < remaining {
-        let chunk = 60.min(remaining - waited);
-        std::thread::sleep(std::time::Duration::from_secs(chunk));
-        waited += chunk;
-        if !power::has_ssh_sessions() {
-          log::info!("SSH sessions ended -- proceeding to sleep");
-          power_mgr.disable_wifi();
-          if let Some(pin) = config.power.tpl5110_done_pin
-             && power_mgr.tpl5110_shutdown(pin)
-          {
-            return Ok(());
-          }
-          let left = remaining.saturating_sub(waited);
-          if left > 0 && config.power.shutdown_after_cycle && power_mgr.shutdown(left) {
-            return Ok(());
-          }
-          if left > 0 {
-            std::thread::sleep(std::time::Duration::from_secs(left));
-          }
-          break;
-        }
-      }
-    } else {
-      // See if we will shutdown or sleep now
-      if let Some(pin) = config.power.tpl5110_done_pin
-         && power_mgr.tpl5110_shutdown(pin)
-      {
-        break;
-      }
-
-      if config.power.shutdown_after_cycle && remaining > 0 && power_mgr.shutdown(remaining) {
-        break;
-      }
-
-      // No SSH, but still staying powered on on battery
-      // disable WiFi and stay idle until the next cycle
-      power_mgr.disable_wifi();
-
-      if remaining > 0 {
-        std::thread::sleep(std::time::Duration::from_secs(remaining));
-      }
+      },
     }
   }
 
   Ok(())
+}
+
+/// Run one dashboard cycle with error recovery (OAuth re-auth, network retry).
+fn run_cycle(config: &mut Config, args: &Args, power_mgr: &mut power::PowerManager) -> Result<()> {
+  match try_cycle(config, args) {
+    Ok(()) => {},
+    Err(DashError::Strava(strava::errors::StravaError::Unauthorized)) => {
+      log::warn!("Unauthorized after auto-refresh -- attempting full OAuth re-authorization");
+      eprintln!("\nRefresh token invalid. Starting OAuth authorization flow...");
+
+      let token_response = strava::oauth::run_auth_flow(&config.strava)?;
+      config.strava.set_refresh_token(token_response.refresh_token);
+      config.save().map_err(DashError::Config)?;
+
+      // Need WiFi for retry -- ensure it's on
+      power_mgr.enable_wifi();
+      if let Err(e) = try_cycle(config, args) {
+        eprintln!("Error after re-authorization: {e:?}");
+      }
+    },
+    Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
+      log::warn!("Network unavailable: {msg}");
+      eprintln!("Network unavailable -- will retry next cycle");
+    },
+    Err(e) => {
+      eprintln!("Error during cycle: {e:?}");
+    },
+  }
+  Ok(())
+}
+
+/// Wait up to `max_secs` for SSH access, polling every 60s.
+/// Returns the number of seconds actually waited. Ends early if no SSH
+/// sessions are detected.
+fn linger(max_secs: u64) -> u64 {
+  if max_secs == 0 {
+    return 0;
+  }
+  log::info!("Lingering {max_secs}s for SSH access...");
+  let mut waited = 0u64;
+  while waited < max_secs {
+    let chunk = 60.min(max_secs - waited);
+    std::thread::sleep(std::time::Duration::from_secs(chunk));
+    waited += chunk;
+    if waited < max_secs && !power::has_ssh_sessions() {
+      log::info!("No SSH sessions -- ending linger early");
+      break;
+    }
+  }
+  waited
+}
+
+/// Try to shut down (TPL5110 -> rtcwake -> software sleep).
+/// Respects SSH inhibition: if an SSH session is active and battery is
+/// above the inhibit threshold, polls until sessions end before shutting
+/// down. Returns `true` if the caller should exit the main loop (hard
+/// shutdown initiated).
+fn shutdown_or_sleep(power: &config::PowerConfig,
+                     power_mgr: &mut power::PowerManager,
+                     remaining: u64,
+                     battery_pct: Option<u8>)
+                     -> bool {
+  let ssh_active = power::has_ssh_sessions();
+  let ssh_inhibits = power.ssh_inhibit_below_percent > 0
+                     && ssh_active
+                     && battery_pct.is_none_or(|p| p > power.ssh_inhibit_below_percent);
+
+  log::info!("Power: battery={}, ssh={ssh_active}, ssh_inhibits={ssh_inhibits}, \
+              shutdown_after_cycle={}",
+             battery_pct.map_or("N/A".to_string(), |p| format!("{p}%")),
+             power.shutdown_after_cycle);
+
+  if ssh_inhibits {
+    return poll_ssh_then_shutdown(power, power_mgr, remaining);
+  }
+
+  try_shutdown(power, power_mgr, remaining);
+
+  // Still alive -- disable WiFi and software-sleep the remaining time
+  power_mgr.disable_wifi();
+  if remaining > 0 {
+    std::thread::sleep(std::time::Duration::from_secs(remaining));
+  }
+  false
+}
+
+/// Poll every 60s until SSH sessions end, then shut down.
+fn poll_ssh_then_shutdown(power: &config::PowerConfig,
+                          power_mgr: &mut power::PowerManager,
+                          remaining: u64)
+                          -> bool {
+  log::info!("SSH inhibiting shutdown -- polling every 60s");
+  let mut waited = 0u64;
+  while waited < remaining {
+    let chunk = 60.min(remaining - waited);
+    std::thread::sleep(std::time::Duration::from_secs(chunk));
+    waited += chunk;
+    if !power::has_ssh_sessions() {
+      log::info!("SSH sessions ended -- proceeding to sleep");
+      power_mgr.disable_wifi();
+      let left = remaining.saturating_sub(waited);
+      if try_shutdown(power, power_mgr, left) {
+        return true;
+      }
+      if left > 0 {
+        std::thread::sleep(std::time::Duration::from_secs(left));
+      }
+      break;
+    }
+  }
+  false
+}
+
+/// Attempt hard shutdown: TPL5110 first, then rtcwake.
+/// Returns `true` if shutdown was initiated (caller should exit).
+fn try_shutdown(power: &config::PowerConfig,
+                power_mgr: &mut power::PowerManager,
+                sleep_secs: u64)
+                -> bool {
+  if let Some(pin) = power.tpl5110_done_pin
+     && power_mgr.tpl5110_shutdown(pin)
+  {
+    return true;
+  }
+  if power.shutdown_after_cycle && sleep_secs > 0 && power_mgr.shutdown(sleep_secs) {
+    return true;
+  }
+  false
 }
 
 /// Run one full cycle: fetch stats -> render image -> display (or save PNG).
@@ -459,92 +472,6 @@ fn fetch_stats_from_cache(display_cfg: &display::config::DisplayConfig,
     });
 
   Ok((dashboard, avatar))
-}
-
-/// Check whether the current local time falls inside the quiet window.
-fn is_quiet_time(power: &config::PowerConfig) -> bool {
-  let hour = Local::now().hour();
-  let start = power.quiet_hours.start;
-  let end = power.quiet_hours.end;
-
-  if start <= end {
-    // e.g. quiet 02:00-06:00 (no midnight wrap)
-    hour >= start && hour < end
-  } else {
-    // e.g. quiet 20:00-08:00 (wraps midnight)
-    hour >= start || hour < end
-  }
-}
-
-/// Compute seconds from now until the quiet window ends.
-fn seconds_until_quiet_end(power: &config::PowerConfig) -> u64 {
-  let now = Local::now();
-  let hour = now.hour();
-  let end = power.quiet_hours.end;
-
-  // Hours remaining until the end hour
-  let hours_left = if hour < end {
-    end - hour
-  } else {
-    // Past midnight wrap: remaining hours today + hours into tomorrow
-    (24 - hour) + end
-  };
-
-  let minutes_left = 60 - now.minute();
-  // Subtract one hour because the minutes already cover part of it,
-  // but ensure we don't underflow.
-  let total_secs = if hours_left > 0 {
-    ((hours_left - 1) as u64 * 3600) + (minutes_left as u64 * 60)
-  } else {
-    minutes_left as u64 * 60
-  };
-
-  // At least 60 seconds to avoid a busy-loop from rounding
-  total_secs.max(60)
-}
-
-/// Compute seconds until the next grid-aligned wake slot.
-///
-/// The grid is anchored at `quiet_hours.end` each day, with slots
-/// spaced `interval_secs` apart.  For example, with quiet end=6 and
-/// interval=1200 (20 min), the slots are 06:00, 06:20, 06:40, 07:00, ...
-///
-/// If the next slot would fall inside quiet hours, returns the seconds
-/// until quiet end instead (i.e. the first slot of the next active window).
-fn seconds_until_next_slot(power: &config::PowerConfig, interval_secs: u64) -> u64 {
-  let now = Local::now();
-  let today_anchor = now.date_naive()
-                        .and_hms_opt(power.quiet_hours.end, 0, 0)
-                        .expect("valid quiet_hours.end")
-                        .and_local_timezone(Local)
-                        .single()
-                        .expect("unambiguous local time");
-
-  // Use today's anchor if it's in the past, otherwise yesterday's.
-  let anchor = if today_anchor <= now {
-    today_anchor
-  } else {
-    today_anchor - Duration::days(1)
-  };
-
-  let elapsed = (now - anchor).num_seconds() as u64;
-  let remainder = elapsed % interval_secs;
-  let next_in = if remainder == 0 { interval_secs } else { interval_secs - remainder };
-
-  // Check whether the target wake time would land in quiet hours.
-  let wake_time = now + Duration::seconds(next_in as i64);
-  let wake_hour = wake_time.hour();
-  let in_quiet = {
-    let start = power.quiet_hours.start;
-    let end = power.quiet_hours.end;
-    if start <= end {
-      wake_hour >= start && wake_hour < end
-    } else {
-      wake_hour >= start || wake_hour < end
-    }
-  };
-
-  if in_quiet { seconds_until_quiet_end(power) } else { next_in.max(60) }
 }
 
 /// Load avatar from cache or fetch from Strava CDN.

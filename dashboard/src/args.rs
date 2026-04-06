@@ -1,5 +1,13 @@
-use clap::Parser;
+use crate::errors::DashError;
+use clap::builder::styling;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use std::path::PathBuf;
+
+const STYLES: styling::Styles =
+  styling::Styles::styled().header(styling::AnsiColor::Green.on_default().bold())
+                           .usage(styling::AnsiColor::Green.on_default().bold())
+                           .literal(styling::AnsiColor::Blue.on_default().bold())
+                           .placeholder(styling::AnsiColor::Cyan.on_default());
 
 #[derive(Parser, Debug)]
 #[command(name = env!("CARGO_BIN_NAME"), max_term_width = 80)]
@@ -42,4 +50,14 @@ pub struct Args {
   /// Polyline thickness in pixels (overrides config.toml)
   #[arg(long, value_name = "PX")]
   pub polyline_thickness: Option<u32>,
+}
+
+impl Args {
+  pub fn try_parse() -> std::result::Result<Self, DashError> {
+    let mut matches = Args::command().styles(STYLES).term_width(80).get_matches();
+    let args =
+      Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
+
+    Ok(args)
+  }
 }
