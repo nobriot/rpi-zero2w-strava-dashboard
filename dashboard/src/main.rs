@@ -23,7 +23,7 @@ const STYLES: styling::Styles =
 
 static PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 
-const CYCLE_SECONDS_ON_POWER: u64 = 60;
+const CYCLE_SECONDS_ON_POWER: u64 = 600;
 
 fn main() {
   let mut log_builder =
@@ -151,11 +151,11 @@ fn run() -> Result<()> {
     }
   }
 
-  let mut peripherals = power::Peripherals::new();
+  let mut power_mgr = power::PowerManager::new();
 
   loop {
     // Re-enable WiFi if it was disabled during the previous sleep
-    peripherals.enable_wifi();
+    power_mgr.enable_wifi();
 
     match try_cycle(&mut config, &args) {
       Ok(()) => {},
@@ -194,13 +194,13 @@ fn run() -> Result<()> {
     // On external power (or no battery sensor): short interval, ignore quiet
     // hours, no shutdown. This also covers dev machines without an INA219.
     if on_power {
-      peripherals.set_normal();
+      power_mgr.set_normal();
       let secs = CYCLE_SECONDS_ON_POWER;
       log::info!("On power -- sleeping {secs}s before next cycle");
       std::thread::sleep(std::time::Duration::from_secs(secs));
       continue;
     } else {
-      peripherals.set_low_power();
+      power_mgr.set_low_power();
     }
 
     // Battery mode: respect quiet hours
@@ -255,9 +255,9 @@ fn run() -> Result<()> {
         waited += chunk;
         if !power::has_ssh_sessions() {
           log::info!("SSH sessions ended -- proceeding to sleep");
-          peripherals.disable_wifi();
+          power_mgr.disable_wifi();
           let left = remaining.saturating_sub(waited);
-          if left > 0 && config.power.shutdown_after_cycle && power::try_rtcwake_shutdown(left) {
+          if left > 0 && config.power.shutdown_after_cycle && power_mgr.shutdown(left) {
             return Ok(());
           }
           if left > 0 {
@@ -268,12 +268,9 @@ fn run() -> Result<()> {
       }
     } else {
       // No SSH -- disable WiFi and sleep/shutdown immediately
-      peripherals.disable_wifi();
+      power_mgr.disable_wifi();
 
-      if config.power.shutdown_after_cycle
-         && remaining > 0
-         && power::try_rtcwake_shutdown(remaining)
-      {
+      if config.power.shutdown_after_cycle && remaining > 0 && power_mgr.shutdown(remaining) {
         break;
       }
 
