@@ -80,7 +80,7 @@ impl Epd7in3e {
 
   fn wait_busy(&self, context: &str) -> Result<(), DisplayError> {
     let level = self.busy.read();
-    log::info!("[BUSY] {context}: pin is {level:?} before wait");
+    log::debug!("[BUSY] {context}: pin is {level:?} before wait");
     let start = std::time::Instant::now();
     // BUSY is LOW when the display is busy, HIGH when ready
     while self.busy.read() == Level::Low {
@@ -91,7 +91,7 @@ impl Epd7in3e {
     }
     let elapsed = start.elapsed();
     if elapsed < Duration::from_millis(10) {
-      log::warn!("[BUSY] {context}: ready in {elapsed:?} (suspiciously fast — display may not be responding)");
+      log::debug!("[BUSY] {context}: ready in {elapsed:?} (suspiciously fast)");
     } else {
       log::info!("[BUSY] {context}: ready in {elapsed:?}");
     }
@@ -230,13 +230,9 @@ impl Epd7in3e {
   }
 
   /// Put the display into deep sleep mode for power saving.
+  /// Assumes the display is already powered off (turn_on_display sends
+  /// POWER_OFF after refresh).
   pub fn sleep(&mut self) -> Result<(), DisplayError> {
-    // POWER_OFF
-    log::info!("sleep: sending POWER_OFF (0x02)");
-    self.send_command(0x02)?;
-    self.send_data(&[0x00])?;
-    self.wait_busy("sleep: POWER_OFF")?;
-
     // DEEP_SLEEP
     self.send_command(0x07)?;
     self.send_data(&[0xA5])?;
