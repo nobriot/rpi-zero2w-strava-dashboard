@@ -446,7 +446,7 @@ fn draw_goal_bar(img: &mut RgbImage,
   let pct = if goal > 0.0 { (ytd_km / goal).min(1.0) } else { 0.0 };
 
   // Sport icon
-  icons::draw_sport_icon(img, x as u32, (y + s.i(1)) as u32, sport, BLACK, s.factor());
+  icons::draw_sport_icon(img, x as u32, (y + s.i(1)) as u32, sport, false, BLACK, s.factor());
 
   // Left: "RUN 234km" (full-width) or "234km" (half-width)
   let left_text = if show_label {
@@ -625,10 +625,12 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
   let mut left_y = y + s.i(26);
   for sp in &stats.sports {
+    let is_mtb = sp.longest.as_ref().is_some_and(|l| l.is_mtb);
     icons::draw_sport_icon(img,
                            (s.i(MARGIN) + s.i(4)) as u32,
                            left_y as u32,
                            sp.sport,
+                           is_mtb,
                            BLACK,
                            s.factor());
     if let Some(ref longest) = sp.longest {
@@ -756,6 +758,7 @@ fn draw_last_activity(img: &mut RgbImage,
                            line1_x as u32,
                            (y + s.i(22)) as u32,
                            last.sport,
+                           last.is_mtb,
                            BLACK,
                            s.factor());
     let line1 = format!("{}  ·  {}", truncate_str(&last.name, 30), last.date);

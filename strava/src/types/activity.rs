@@ -136,6 +136,10 @@ impl SummaryActivity {
     self.sport() == Some(SportType::Swim)
   }
 
+  pub fn is_mtb(&self) -> bool {
+    self.sport_type.as_deref() == Some("MountainBikeRide")
+  }
+
   /// Map `sport_type` string to a [`SportType`] enum value.
   ///
   /// Prefers the newer `sport_type` field; falls back to the deprecated `type`

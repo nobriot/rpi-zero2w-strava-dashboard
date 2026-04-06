@@ -5,6 +5,7 @@ pub const SIZE: u32 = 20;
 
 const ICON_RUN_SVG: &str = include_str!("../assets/icon_run.svg");
 const ICON_RIDE_SVG: &str = include_str!("../assets/icon_bike.svg");
+const ICON_MTB_SVG: &str = include_str!("../assets/icon_mtb.svg");
 const ICON_SWIM_SVG: &str = include_str!("../assets/icon_swim.svg");
 
 const ICON_RULER_SVG: &str = include_str!("../assets/icon_ruler.svg");
@@ -86,6 +87,10 @@ pub fn draw_cyclist(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u
   draw_svg_icon(img, x, y, ICON_RIDE_SVG, color, scale);
 }
 
+pub fn draw_mtb(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_MTB_SVG, color, scale);
+}
+
 pub fn draw_swimmer(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
   draw_svg_icon(img, x, y, ICON_SWIM_SVG, color, scale);
 }
@@ -103,14 +108,17 @@ pub fn draw_zap(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) 
 }
 
 /// Draw the sport-appropriate icon.
+/// When `is_mtb` is true and the sport is Ride, use the mountain bike icon.
 pub fn draw_sport_icon(img: &mut RgbImage,
                        x: u32,
                        y: u32,
                        sport: common::SportType,
+                       is_mtb: bool,
                        color: Rgb<u8>,
                        scale: u32) {
   match sport {
     common::SportType::Run => draw_runner(img, x, y, color, scale),
+    common::SportType::Ride if is_mtb => draw_mtb(img, x, y, color, scale),
     common::SportType::Ride => draw_cyclist(img, x, y, color, scale),
     common::SportType::Swim => draw_swimmer(img, x, y, color, scale),
   }

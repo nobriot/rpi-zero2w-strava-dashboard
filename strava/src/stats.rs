@@ -125,7 +125,8 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
                       moving_time_display: a.format_moving_time(),
                       pace_or_speed,
                       date: format_date(&a.start_date_local),
-                      kudos: a.kudos_count }
+                      kudos: a.kudos_count,
+                      is_mtb: a.is_mtb() }
 }
 
 /// Race distance buckets for finding best running efforts.
