@@ -161,6 +161,34 @@ impl PowerManager {
     }
   }
 
+  /// Signal the TPL5110 to cut power by asserting the DONE pin high.
+  ///
+  /// Syncs filesystems first since the power cut is immediate and hard.
+  /// Returns `true` if the signal was sent (caller should not expect to
+  /// run further code -- power will be cut). Returns `false` on GPIO
+  /// error so the caller can fall back to rtcwake or software sleep.
+  pub fn tpl5110_shutdown(&self, done_pin: u8) -> bool {
+    log::info!("TPL5110: syncing filesystems before power cut");
+    let _ = Command::new("sync").status();
+
+    match rppal::gpio::Gpio::new().and_then(|gpio| gpio.get(done_pin)) {
+      Ok(pin) => {
+        log::info!("TPL5110: asserting DONE on GPIO {done_pin}");
+        let mut pin = pin.into_output();
+        pin.set_high();
+        // TPL5110 should cut power within milliseconds.
+        // If still alive after 5s, it did not work.
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        log::warn!("TPL5110: still alive after DONE -- power was not cut");
+        false
+      },
+      Err(e) => {
+        log::warn!("TPL5110: failed to access GPIO {done_pin}: {e}");
+        false
+      },
+    }
+  }
+
   fn set_bluetooth(&mut self, enable: bool) {
     if enable != self.bt_blocked {
       return;

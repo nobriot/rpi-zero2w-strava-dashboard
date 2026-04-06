@@ -94,6 +94,13 @@ pub struct PowerConfig {
   /// Default: false.
   #[serde(default)]
   pub sync_firmware: bool,
+
+  /// GPIO pin connected to the TPL5110 DONE signal. When set, the Pi
+  /// asserts this pin high after each battery cycle to signal the TPL5110
+  /// to cut power. The wake interval is set by the TPL5110 resistor.
+  /// Default: None (TPL5110 not connected).
+  #[serde(default)]
+  pub tpl5110_done_pin: Option<u8>,
 }
 
 fn default_sleep_interval() -> u64 {
@@ -117,7 +124,8 @@ impl Default for PowerConfig {
            charging_interval_secs:    default_charging_interval(),
            linger_secs:               default_linger(),
            ssh_inhibit_below_percent: default_ssh_inhibit(),
-           sync_firmware:             false, }
+           sync_firmware:             false,
+           tpl5110_done_pin:          None, }
   }
 }
 

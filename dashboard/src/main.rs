@@ -256,6 +256,11 @@ fn run() -> Result<()> {
         if !power::has_ssh_sessions() {
           log::info!("SSH sessions ended -- proceeding to sleep");
           power_mgr.disable_wifi();
+          if let Some(pin) = config.power.tpl5110_done_pin
+             && power_mgr.tpl5110_shutdown(pin)
+          {
+            return Ok(());
+          }
           let left = remaining.saturating_sub(waited);
           if left > 0 && config.power.shutdown_after_cycle && power_mgr.shutdown(left) {
             return Ok(());
@@ -269,6 +274,12 @@ fn run() -> Result<()> {
     } else {
       // No SSH -- disable WiFi and sleep/shutdown immediately
       power_mgr.disable_wifi();
+
+      if let Some(pin) = config.power.tpl5110_done_pin
+         && power_mgr.tpl5110_shutdown(pin)
+      {
+        break;
+      }
 
       if config.power.shutdown_after_cycle && remaining > 0 && power_mgr.shutdown(remaining) {
         break;
