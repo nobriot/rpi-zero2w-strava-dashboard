@@ -24,7 +24,9 @@ pub fn compute(stats: &AthleteStats,
                      }
 
                      let sport_activities: Vec<&SummaryActivity> =
-                       activities.iter().filter(|a| a.sport() == Some(sport)).collect();
+                       activities.iter()
+                                 .filter(|a| a.sport() == Some(sport) && a.can_be_displayed())
+                                 .collect();
 
                      let fastest = sport_activities.iter()
                                                    .filter(|a| a.distance > 0.0)

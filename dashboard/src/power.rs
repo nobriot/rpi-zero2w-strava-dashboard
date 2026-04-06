@@ -179,11 +179,11 @@ impl PowerManager {
         // TPL5110 should cut power within milliseconds.
         // If still alive after 5s, it did not work.
         std::thread::sleep(std::time::Duration::from_secs(5));
-        log::warn!("TPL5110: still alive after DONE -- power was not cut");
+        log::error!("TPL5110: still alive after DONE -- power was not cut");
         false
       },
       Err(e) => {
-        log::warn!("TPL5110: failed to access GPIO {done_pin}: {e}");
+        log::error!("TPL5110: failed to access GPIO {done_pin}: {e}");
         false
       },
     }
