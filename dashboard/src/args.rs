@@ -50,6 +50,10 @@ pub struct Args {
   /// Polyline thickness in pixels (overrides config.toml)
   #[arg(long, value_name = "PX")]
   pub polyline_thickness: Option<u32>,
+
+  /// Append log output to a file (in addition to stderr)
+  #[arg(long, value_name = "PATH")]
+  pub log_file: Option<PathBuf>,
 }
 
 impl Args {

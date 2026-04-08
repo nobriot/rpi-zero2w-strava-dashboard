@@ -17,8 +17,16 @@ use std::path::PathBuf;
 static PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() {
-  logging::setup();
-  let result = run();
+  let args = match Args::try_parse() {
+    Ok(a) => a,
+    Err(e) => {
+      eprintln!("{} - error: {:?}", PROGRAM_NAME, e);
+      std::process::exit(1);
+    },
+  };
+
+  logging::setup(args.log_file.as_deref());
+  let result = run(args);
 
   match result {
     Ok(_) => {},
@@ -80,9 +88,7 @@ fn prompt(label: &str) -> Result<String> {
   Ok(value)
 }
 
-fn run() -> Result<()> {
-  let args = Args::try_parse()?;
-
+fn run(args: Args) -> Result<()> {
   // Clear any pending DS3231 alarm from a previous rtcwake cycle
   ds3231::clear_alarm_if_pending();
 

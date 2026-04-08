@@ -15,7 +15,7 @@ pub enum SleepPlan {
 pub fn plan(power: &PowerConfig, battery: Option<&BatteryStatus>) -> SleepPlan {
   let on_power = battery.is_none() || battery.is_some_and(|b| b.is_charging());
 
-  if on_power {
+  if on_power && power.tpl5110_done_pin.is_none() {
     return SleepPlan::OnPower { sleep_secs: power.charging_interval_secs, };
   }
 
