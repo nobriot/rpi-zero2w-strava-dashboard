@@ -23,6 +23,10 @@ show_totals = false
 # Set to false to hide it and give more space to other sections. Default: true.
 show_longest_fastest = true
 
+# Rotate the image 180 degrees for use in a stand. Default: true.
+# Set to false if the display is mounted right-side up.
+flip = true
+
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4
 

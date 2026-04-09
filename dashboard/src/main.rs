@@ -330,6 +330,8 @@ fn try_cycle(config: &mut Config, args: &Args) -> Result<()> {
                                                         avatar.as_deref(),
                                                         is_offline,
                                                         ss_scale);
+      let epd_img =
+        if display_config.flip { image::imageops::rotate180(&epd_img) } else { epd_img };
       let buf = display::palette::quantize_supersampled_to_epd_buffer(&epd_img, 800, 480);
       epd.display_image(&buf)?;
       epd.sleep()?;

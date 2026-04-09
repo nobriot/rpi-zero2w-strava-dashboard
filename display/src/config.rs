@@ -34,6 +34,11 @@ pub struct DisplayConfig {
   /// Whether to show the LONGEST / FASTEST section (default: true).
   #[serde(default = "default_show_longest_fastest")]
   pub show_longest_fastest: bool,
+
+  /// Rotate the image 180 degrees. Useful when the display is mounted
+  /// upside-down in a stand. Default: true.
+  #[serde(default = "default_flip")]
+  pub flip: bool,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -43,6 +48,9 @@ fn default_show_totals() -> bool {
   true
 }
 fn default_show_longest_fastest() -> bool {
+  true
+}
+fn default_flip() -> bool {
   true
 }
 fn default_goals() -> Vec<GoalConfig> {
@@ -62,7 +70,8 @@ impl Default for DisplayConfig {
     Self { goals:                default_goals(),
            polyline_thickness:   default_polyline_thickness(),
            show_totals:          default_show_totals(),
-           show_longest_fastest: default_show_longest_fastest(), }
+           show_longest_fastest: default_show_longest_fastest(),
+           flip:                 default_flip(), }
   }
 }
 
