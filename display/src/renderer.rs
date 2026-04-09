@@ -450,9 +450,9 @@ fn draw_goal_bar(img: &mut RgbImage,
 
   // Left: "RUN 234km" (full-width) or "234km" (half-width)
   let left_text = if show_label {
-    format!("{}  {:.0}km", sport_label(sport), ytd_km)
+    format!("{}  {:.0} km", sport_label(sport), ytd_km)
   } else {
-    format!("{:.0}km", ytd_km)
+    format!("{:.0} km", ytd_km)
   };
   let left_scale = PxScale::from(left_font_sz);
   draw_text_mut(img,
@@ -575,7 +575,7 @@ fn draw_totals_row(img: &mut RgbImage,
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
   let title_w = measure_text_width(font_bold, s.px(TITLE_FONT_SZ), TOTALS) as i32;
-  let stats_x = s.i(MARGIN) + icon_w + title_w + s.i(10);
+  let stats_x = s.i(MARGIN) + icon_w + title_w + s.i(20);
   let baseline_offset = s.i(4);
   draw_text_mut(img,
                 SECONDARY_COLOR,
@@ -682,14 +682,15 @@ fn draw_longest_fastest(img: &mut RgbImage,
     if let (Some(pace), Some(dist), Some(time)) =
       (&rb.pace, rb.distance_km, &rb.moving_time_display)
     {
-      let line1 = format!("{}  -  {}  ·  {}  ·  ({:.1}km)", rb.label, pace, time, dist);
-      draw_text_mut(img,
-                    BLACK,
-                    right_x + s.u(ICON_SZ) as i32 + s.i(12),
-                    right_y + s.i(2),
-                    detail_sz,
-                    font_bold,
-                    &line1);
+      let line1 = format!("{}  -  {}  ·  {}", rb.label, pace, time);
+      let text_x = right_x + s.u(ICON_SZ) as i32 + s.i(12);
+      let text_y = right_y + s.i(2);
+      draw_text_mut(img, BLACK, text_x, text_y, detail_sz, font_bold, &line1);
+      if dist > rb.target_km * 1.1 {
+        let bold_w = measure_text_width(font_bold, detail_sz, &line1) as i32;
+        let suffix = format!("  ·  ({:.1}km)", dist);
+        draw_text_mut(img, BLACK, text_x + bold_w, text_y, detail_sz, font, &suffix);
+      }
       let name = rb.name.as_deref().unwrap_or("—");
       let date = rb.date.as_deref().unwrap_or("—");
       let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
