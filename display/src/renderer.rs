@@ -15,6 +15,7 @@ const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = Rgb([0, 150, 0]);
 const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
 const RED: Rgb<u8> = Rgb([200, 0, 0]);
+const DARK_GRAY: Rgb<u8> = Rgb([120, 120, 120]);
 const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
@@ -174,17 +175,19 @@ pub fn render_dashboard(stats: &DashboardStats,
   };
   draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, s);
 
-  draw_battery_indicator(&mut img, &font_bold, battery, is_offline, s);
+  draw_battery_indicator(&mut img, &font, &font_bold, battery, is_offline, config.debug, s);
 
   img
 }
 
-/// Draw battery percentage and optional "OFFLINE" label at the bottom-right
-/// corner.
+/// Draw battery percentage, optional "OFFLINE" label, and optional debug
+/// sync timestamp at the bottom-right corner.
 fn draw_battery_indicator(img: &mut RgbImage,
+                          font: &FontRef,
                           font_bold: &FontRef,
                           battery: Option<&BatteryStatus>,
                           is_offline: bool,
+                          debug: bool,
                           s: Scale) {
   let bat_pct = battery.map(|b| b.percentage()).unwrap_or(100);
   let bat_fill = bat_pct as f32 / 100.0;
@@ -197,6 +200,16 @@ fn draw_battery_indicator(img: &mut RgbImage,
   let gap = s.i(4);
   let total_w = text_w + gap + icon_w;
   let x = s.u(W) as i32 - total_w;
+
+  if debug {
+    let now = chrono::Local::now();
+    let sync_text = format!("synced {}", now.format("%d/%m %H:%M"));
+    let sync_scale = s.px(12.0);
+    let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
+    let sync_x = s.u(W) as i32 - sync_w;
+    let sync_y = s.u(H) as i32 - s.i(56);
+    draw_text_mut(img, DARK_GRAY, sync_x, sync_y, sync_scale, font, &sync_text);
+  }
 
   if is_offline {
     let label = "OFFLINE";

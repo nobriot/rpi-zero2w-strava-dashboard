@@ -27,6 +27,9 @@ show_longest_fastest = true
 # Set to false if the display is mounted right-side up.
 flip = true
 
+# Show debug info (last sync time) on the dashboard. Default: false.
+# debug = true
+
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4
 
@@ -59,8 +62,8 @@ longest_by = "distance"
 sleep_interval_secs = 10800
 
 # Quiet hours -- no refresh between these hours (0-23, local time)
-# when running on battery. Default: {start = 20, end = 6}
-quiet_hours = { start = 20, end = 6 }
+# when running on battery. Default: {start = 22, end = 6}
+quiet_hours = { start = 22, end = 6 }
 
 # Enable rtcwake poweroff between refresh cycles for maximum battery savings.
 # Requires DS3231 RTC with INT/SQW wired to GPIO4 and the gpio-shutdown

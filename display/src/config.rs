@@ -39,6 +39,10 @@ pub struct DisplayConfig {
   /// upside-down in a stand. Default: true.
   #[serde(default = "default_flip")]
   pub flip: bool,
+
+  /// Show debug info (last sync timestamp) on the dashboard. Default: false.
+  #[serde(default)]
+  pub debug: bool,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -71,7 +75,8 @@ impl Default for DisplayConfig {
            polyline_thickness:   default_polyline_thickness(),
            show_totals:          default_show_totals(),
            show_longest_fastest: default_show_longest_fastest(),
-           flip:                 default_flip(), }
+           flip:                 default_flip(),
+           debug:                false, }
   }
 }
 
