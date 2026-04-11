@@ -111,7 +111,7 @@ fn run() -> Result<()> {
     }
   }
 
-  let mut power_mgr = power::PowerManager::new();
+  let mut power_mgr = power::PowerManager::new(config.power.tpl5110_done_pin);
 
   loop {
     power_mgr.enable_wifi();
@@ -271,9 +271,7 @@ fn try_shutdown(power: &config::PowerConfig,
                 power_mgr: &mut power::PowerManager,
                 sleep_secs: u64)
                 -> bool {
-  if let Some(pin) = power.tpl5110_done_pin
-     && power_mgr.tpl5110_shutdown(pin)
-  {
+  if power_mgr.tpl5110_shutdown() {
     return true;
   }
   if power.shutdown_after_cycle && sleep_secs > 0 && power_mgr.shutdown(sleep_secs) {

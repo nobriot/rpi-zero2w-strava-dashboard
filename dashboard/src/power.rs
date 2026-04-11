@@ -66,14 +66,29 @@ pub struct PowerManager {
   wifi_blocked: bool,
   bt_blocked:   bool,
   usb_unbound:  bool,
+  tpl5110_done: Option<rppal::gpio::OutputPin>,
 }
 
 impl PowerManager {
-  pub fn new() -> Self {
-    Self { mode:         Mode::Normal,
+  pub fn new(tpl5110_done_pin: Option<u8>) -> Self {
+    let tpl5110_done = tpl5110_done_pin.and_then(|pin| {
+                         match rppal::gpio::Gpio::new().and_then(|gpio| gpio.get(pin)) {
+                           Ok(p) => {
+                             let out = p.into_output_low();
+                             log::info!("TPL5110: DONE pin GPIO {pin} initialized LOW");
+                             Some(out)
+                           },
+                           Err(e) => {
+                             log::warn!("TPL5110: failed to initialize GPIO {pin}: {e}");
+                             None
+                           },
+                         }
+                       });
+    Self { mode: Mode::Normal,
            wifi_blocked: false,
-           bt_blocked:   false,
-           usb_unbound:  false, }
+           bt_blocked: false,
+           usb_unbound: false,
+           tpl5110_done }
   }
 
   /// Current power mode.
@@ -167,28 +182,25 @@ impl PowerManager {
   ///
   /// Syncs filesystems first since the power cut is immediate and hard.
   /// Returns `true` if the signal was sent (caller should not expect to
-  /// run further code -- power will be cut). Returns `false` on GPIO
-  /// error so the caller can fall back to rtcwake or software sleep.
-  pub fn tpl5110_shutdown(&self, done_pin: u8) -> bool {
+  /// run further code -- power will be cut). Returns `false` if no DONE
+  /// pin was configured so the caller can fall back to rtcwake or
+  /// software sleep.
+  pub fn tpl5110_shutdown(&mut self) -> bool {
+    let Some(ref mut pin) = self.tpl5110_done else {
+      return false;
+    };
+
     log::info!("TPL5110: syncing filesystems before power cut");
     let _ = Command::new("sync").status();
 
-    match rppal::gpio::Gpio::new().and_then(|gpio| gpio.get(done_pin)) {
-      Ok(pin) => {
-        log::info!("TPL5110: asserting DONE on GPIO {done_pin}");
-        let mut pin = pin.into_output();
-        pin.set_high();
-        // TPL5110 should cut power within milliseconds.
-        // If still alive after 5s, it did not work.
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        log::error!("TPL5110: still alive after DONE -- power was not cut");
-        false
-      },
-      Err(e) => {
-        log::error!("TPL5110: failed to access GPIO {done_pin}: {e}");
-        false
-      },
-    }
+    log::info!("TPL5110: asserting DONE high");
+    pin.set_high();
+    // TPL5110 should cut power within milliseconds.
+    // If still alive after 5s, it did not work.
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    log::error!("TPL5110: still alive after DONE -- power was not cut");
+    pin.set_low();
+    false
   }
 
   fn set_bluetooth(&mut self, enable: bool) {
@@ -282,7 +294,7 @@ mod tests {
 
   #[test]
   fn new_starts_in_normal_mode() {
-    let pm = PowerManager::new();
+    let pm = PowerManager::new(None);
     assert_eq!(pm.mode(), Mode::Normal);
     assert!(!pm.wifi_blocked);
     assert!(!pm.bt_blocked);
@@ -291,7 +303,7 @@ mod tests {
 
   #[test]
   fn set_low_power_changes_mode() {
-    let mut pm = PowerManager::new();
+    let mut pm = PowerManager::new(None);
     pm.set_low_power();
     assert_eq!(pm.mode(), Mode::LowPower);
     assert!(pm.bt_blocked);
@@ -302,7 +314,7 @@ mod tests {
 
   #[test]
   fn set_normal_restores_mode() {
-    let mut pm = PowerManager::new();
+    let mut pm = PowerManager::new(None);
     pm.set_low_power();
     pm.disable_wifi();
     assert!(pm.wifi_blocked);
@@ -316,7 +328,7 @@ mod tests {
 
   #[test]
   fn wifi_toggle_is_independent_of_mode() {
-    let mut pm = PowerManager::new();
+    let mut pm = PowerManager::new(None);
     pm.disable_wifi();
     assert!(pm.wifi_blocked);
     assert_eq!(pm.mode(), Mode::Normal);
@@ -327,7 +339,7 @@ mod tests {
 
   #[test]
   fn redundant_mode_changes_are_noops() {
-    let mut pm = PowerManager::new();
+    let mut pm = PowerManager::new(None);
     pm.set_low_power();
     let bt = pm.bt_blocked;
     let usb = pm.usb_unbound;
@@ -340,7 +352,7 @@ mod tests {
 
   #[test]
   fn redundant_wifi_toggles_are_noops() {
-    let mut pm = PowerManager::new();
+    let mut pm = PowerManager::new(None);
     // Already unblocked -- enable_wifi should be a no-op
     pm.enable_wifi();
     assert!(!pm.wifi_blocked);
@@ -354,7 +366,7 @@ mod tests {
   #[test]
   fn shutdown_returns_false_without_rtc() {
     // On dev machines without /dev/rtc0, shutdown should return false
-    let pm = PowerManager::new();
+    let pm = PowerManager::new(None);
     if !std::path::Path::new("/dev/rtc0").exists() {
       assert!(!pm.shutdown(60));
     }
