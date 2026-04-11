@@ -124,8 +124,12 @@ impl PowerManager {
 
   /// Disable WiFi via rfkill. Called after the linger window to save power
   /// during the long sleep.
+  /// We don't disable wifi if we have a tpl5110 pin configured
   pub fn disable_wifi(&mut self) {
     if self.wifi_blocked {
+      return;
+    }
+    if self.tpl5110_done.is_some() {
       return;
     }
     rfkill("block", "wifi");
