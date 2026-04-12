@@ -5,4 +5,4 @@ src = "src"
 title = "Strava E-Paper Dashboard"
 
 [output.html]
-git-repository-url = "https://github.com/nwoltman/rpi-zero2w-strava-dash"
+git-repository-url = "https://github.com/nobriot/rpi-zero2w-strava-dashboard"

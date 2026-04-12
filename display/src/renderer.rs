@@ -15,8 +15,8 @@ const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = Rgb([0, 150, 0]);
 const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
 const RED: Rgb<u8> = Rgb([200, 0, 0]);
-const DARK_GRAY: Rgb<u8> = Rgb([120, 120, 120]);
-const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
+// const DARK_GRAY: Rgb<u8> = Rgb([120, 120, 120]);
+// const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
 const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
@@ -208,7 +208,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
     let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
     let sync_x = s.u(W) as i32 - sync_w;
     let sync_y = s.u(H) as i32 - s.i(56);
-    draw_text_mut(img, DARK_GRAY, sync_x, sync_y, sync_scale, font, &sync_text);
+    draw_text_mut(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text);
   }
 
   if is_offline {
@@ -667,7 +667,7 @@ fn draw_longest_fastest(img: &mut RgbImage,
                               &line2);
     } else if stats.show_all_sports {
       draw_text_mut(img,
-                    LIGHT_GRAY,
+                    BLACK,
                     s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
                     left_y + s.i(2),
                     detail_sz,
