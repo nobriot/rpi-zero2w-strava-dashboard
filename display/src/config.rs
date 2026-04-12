@@ -1,6 +1,15 @@
 use common::{LongestBy, SportType};
 use serde::{Deserialize, Serialize};
 
+/// Display orientation.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Orientation {
+  #[default]
+  Landscape,
+  Portrait,
+}
+
 /// A single sport distance goal for the dashboard progress bars.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GoalConfig {
@@ -43,6 +52,11 @@ pub struct DisplayConfig {
   /// Show debug info (last sync timestamp) on the dashboard. Default: false.
   #[serde(default)]
   pub debug: bool,
+
+  /// Display orientation. Default: landscape (800x480).
+  /// Set to "portrait" for vertical layout (480x800).
+  #[serde(default)]
+  pub orientation: Orientation,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -76,7 +90,8 @@ impl Default for DisplayConfig {
            show_totals:          default_show_totals(),
            show_longest_fastest: default_show_longest_fastest(),
            flip:                 default_flip(),
-           debug:                false, }
+           debug:                false,
+           orientation:          Orientation::default(), }
   }
 }
 

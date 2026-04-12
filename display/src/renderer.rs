@@ -1,4 +1,4 @@
-use crate::config::{DisplayConfig, GoalConfig};
+use crate::config::{DisplayConfig, GoalConfig, Orientation};
 use crate::icons;
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
@@ -7,8 +7,24 @@ use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
 use imageproc::rect::Rect;
 
-const W: u32 = 800;
-const H: u32 = 480;
+const LANDSCAPE_W: u32 = 800;
+const LANDSCAPE_H: u32 = 480;
+
+/// Canvas dimensions, derived from the orientation config.
+#[derive(Clone, Copy)]
+struct Canvas {
+  w: u32,
+  h: u32,
+}
+
+impl Canvas {
+  fn from_orientation(o: Orientation) -> Self {
+    match o {
+      Orientation::Landscape => Canvas { w: LANDSCAPE_W, h: LANDSCAPE_H },
+      Orientation::Portrait => Canvas { w: LANDSCAPE_H, h: LANDSCAPE_W },
+    }
+  }
+}
 
 const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
@@ -106,23 +122,43 @@ impl Layout {
              n_goals: usize,
              show_totals: bool,
              show_longest_fastest: bool,
+             orientation: Orientation,
+             c: Canvas,
              s: Scale)
              -> Self {
-    // With 3 goals, the 2nd and 3rd share a row → 2 visual rows max
-    let n_bar_rows = n_goals.min(2) as i32;
     let n_lf = count_longest_fastest_entries(stats) as i32;
+
+    // Portrait: all bars stacked; landscape: 2nd+3rd share a row
+    let n_bar_rows = match orientation {
+      Orientation::Landscape => n_goals.min(2) as i32,
+      Orientation::Portrait => n_goals as i32,
+    };
+
+    // Portrait: longest/fastest are stacked (both columns), so double the entries
+    let lf_rows = match orientation {
+      Orientation::Landscape => n_lf,
+      Orientation::Portrait => {
+        let longest = if stats.show_all_sports {
+          stats.sports.len()
+        } else {
+          stats.sports.iter().filter(|sp| sp.longest.is_some()).count()
+        };
+        let fastest = stats.run_race_bests.len();
+        (longest + fastest) as i32
+      },
+    };
 
     let base_bars = n_bar_rows * 34;
     let base_totals = if show_totals { 38 } else { 0 };
-    let base_lf = if show_longest_fastest { 30 + n_lf * 36 } else { 0 };
+    let base_lf = if show_longest_fastest { 30 + lf_rows * 36 } else { 0 };
     let base_last = 64;
     let base_gaps = 32;
     let needed = HEADER_H as i32 + base_bars + base_totals + base_lf + base_last + base_gaps;
-    let budget = H as i32;
+    let budget = c.h as i32;
     let slack = (budget - needed).max(0);
 
     let bar_extra = (slack / 4).min(14);
-    let lf_extra = if n_lf > 0 { (slack / 6).min(8) } else { 0 };
+    let lf_extra = if lf_rows > 0 { (slack / 6).min(8) } else { 0 };
 
     Layout { bar_section_h:  s.i(34 + bar_extra),
              bar_h:          s.u(16),
@@ -151,33 +187,54 @@ pub fn render_dashboard(stats: &DashboardStats,
                         is_offline: bool,
                         s: Scale)
                         -> RgbImage {
-  let mut img = RgbImage::from_pixel(s.u(W), s.u(H), WHITE);
+  let c = Canvas::from_orientation(config.orientation);
+  let mut img = RgbImage::from_pixel(s.u(c.w), s.u(c.h), WHITE);
 
   let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
   let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
   let font_symbol = FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
   let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
-  let layout =
-    Layout::compute(stats, config.goals.len(), config.show_totals, config.show_longest_fastest, s);
+  let layout = Layout::compute(stats,
+                               config.goals.len(),
+                               config.show_totals,
+                               config.show_longest_fastest,
+                               config.orientation,
+                               c,
+                               s);
 
-  draw_header(&mut img, &font_bold, stats, avatar, s);
+  draw_header(&mut img, &font_bold, stats, avatar, config.orientation, c, s);
 
-  let y = draw_sport_bars(&mut img, &font, &font_bold, &font_symbol, stats, config, &layout, s);
+  let y = draw_sport_bars(&mut img, &font, &font_bold, &font_symbol, stats, config, &layout, c, s);
   let y = if config.show_totals {
-    draw_totals_row(&mut img, &font, &font_bold, stats, y, s)
+    draw_totals_row(&mut img, &font, &font_bold, stats, y, c, s)
   } else {
     y
   };
   let y = if config.show_longest_fastest {
-    draw_longest_fastest(&mut img, &font, &font_bold, &font_emoji, stats, y, &layout, s)
+    draw_longest_fastest(&mut img,
+                         &font,
+                         &font_bold,
+                         &font_emoji,
+                         stats,
+                         y,
+                         &layout,
+                         c,
+                         config.orientation,
+                         s)
   } else {
     y
   };
-  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, s);
+  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, c, s);
 
-  draw_battery_indicator(&mut img, &font, &font_bold, battery, is_offline, config.debug, s);
+  draw_battery_indicator(&mut img, &font, &font_bold, battery, is_offline, config.debug, c, s);
 
-  img
+  // Portrait is rendered at 480x800 but the physical display is 800x480.
+  // Rotate 90 degrees CW so the image maps correctly to the hardware.
+  if config.orientation == Orientation::Portrait {
+    image::imageops::rotate90(&img)
+  } else {
+    img
+  }
 }
 
 /// Draw battery percentage, optional "OFFLINE" label, and optional debug
@@ -188,6 +245,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
                           battery: Option<&BatteryStatus>,
                           is_offline: bool,
                           debug: bool,
+                          c: Canvas,
                           s: Scale) {
   let bat_pct = battery.map(|b| b.percentage()).unwrap_or(100);
   let bat_fill = bat_pct as f32 / 100.0;
@@ -199,26 +257,26 @@ fn draw_battery_indicator(img: &mut RgbImage,
   let icon_w = s.i(24);
   let gap = s.i(4);
   let total_w = text_w + gap + icon_w;
-  let x = s.u(W) as i32 - total_w;
+  let x = s.u(c.w) as i32 - total_w;
 
   if debug {
     let now = chrono::Local::now();
     let sync_text = format!("synced {}", now.format("%d/%m %H:%M"));
     let sync_scale = s.px(12.0);
     let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
-    let sync_x = s.u(W) as i32 - sync_w;
-    let sync_y = s.u(H) as i32 - s.i(56);
+    let sync_x = s.u(c.w) as i32 - sync_w;
+    let sync_y = s.u(c.h) as i32 - s.i(56);
     draw_text_mut(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text);
   }
 
   if is_offline {
     let label = "OFFLINE";
     let label_scale = s.px(14.0);
-    let y_offline = s.u(H) as i32 - s.i(40);
+    let y_offline = s.u(c.h) as i32 - s.i(40);
     draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
   }
 
-  let y = s.u(H) as i32 - s.i(MARGIN);
+  let y = s.u(c.h) as i32 - s.i(MARGIN);
   draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
   icons::draw_battery(img,
                       (x + text_w + gap) as u32,
@@ -233,24 +291,40 @@ fn draw_header(img: &mut RgbImage,
                font_bold: &FontRef,
                stats: &DashboardStats,
                avatar: Option<&[u8]>,
+               orientation: Orientation,
+               c: Canvas,
                s: Scale) {
-  draw_filled_rect_mut(img, Rect::at(0, 0).of_size(s.u(W), s.u(HEADER_H)), ORANGE);
-
-  if let Some(bytes) = avatar {
-    draw_avatar(img, bytes, s);
-  }
+  draw_filled_rect_mut(img, Rect::at(0, 0).of_size(s.u(c.w), s.u(HEADER_H)), ORANGE);
 
   let year = Utc::now().year();
   let title = format!("{} - {}", stats.athlete_first_name, year);
   let title_scale = s.px(45.0);
   let title_w = measure_text_width(font_bold, title_scale, &title);
-  let title_x = ((s.u(W) as f32 - title_w) / 2.0) as i32;
+
+  // Measure how much space we need for all header elements
+  let avatar_space = if avatar.is_some() { s.u(AVATAR_PAD + AVATAR_SIZE + 4) as f32 } else { 0.0 };
+  let logo_space = s.f(120.0);
+  let available = s.u(c.w) as f32;
+
+  // Draw what fits: avatar first, logo last
+  let show_avatar = avatar.is_some() && avatar_space + title_w + 20.0 <= available;
+  let show_logo = orientation != Orientation::Portrait
+                  && show_avatar as u32 as f32 * avatar_space + title_w + logo_space + 20.0
+                     <= available;
+
+  if show_avatar && let Some(bytes) = avatar {
+    draw_avatar(img, bytes, s);
+  }
+
+  let title_x = ((available - title_w) / 2.0) as i32;
   draw_text_mut(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title);
 
-  draw_powered_by_logo(img, s);
+  if show_logo {
+    draw_powered_by_logo(img, c, s);
+  }
 }
 
-fn draw_powered_by_logo(img: &mut RgbImage, s: Scale) {
+fn draw_powered_by_logo(img: &mut RgbImage, c: Canvas, s: Scale) {
   let logo = match image::load_from_memory(POWERED_BY_STRAVA) {
     Ok(l) => l,
     Err(_) => return,
@@ -261,7 +335,7 @@ fn draw_powered_by_logo(img: &mut RgbImage, s: Scale) {
   let resized = logo.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
   let rgba = resized.to_rgba8();
 
-  let ox = s.u(W) - target_w - s.u(5);
+  let ox = s.u(c.w) - target_w - s.u(5);
   let oy = s.u(4);
 
   for py in 0..target_h {
@@ -336,9 +410,10 @@ fn draw_sport_bars(img: &mut RgbImage,
                    stats: &DashboardStats,
                    config: &DisplayConfig,
                    layout: &Layout,
+                   c: Canvas,
                    s: Scale)
                    -> i32 {
-  let full_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
+  let full_w = (s.u(c.w) as i32 - 2 * s.i(MARGIN)) as u32;
   let mut y = (s.u(HEADER_H) + s.u(8)) as i32;
 
   let goals = &config.goals;
@@ -346,36 +421,18 @@ fn draw_sport_bars(img: &mut RgbImage,
     return y;
   }
 
-  match goals.len() {
-    1 | 2 => {
-      for goal_cfg in goals {
-        draw_goal_bar(img,
-                      font,
-                      font_bold,
-                      font_symbol,
-                      stats,
-                      goal_cfg,
-                      layout,
-                      s.i(MARGIN),
-                      full_w,
-                      s.f(18.0),
-                      s.f(16.0),
-                      s.f(16.0),
-                      s.f(22.0),
-                      true,
-                      y,
-                      s);
-        y += layout.bar_section_h;
-      }
-    },
-    _ => {
-      // First goal: full-width
+  let is_portrait = config.orientation == Orientation::Portrait;
+
+  // Portrait: all bars stacked as compact (no sport label)
+  if is_portrait || goals.len() <= 2 {
+    let show_label = !is_portrait;
+    for goal_cfg in goals {
       draw_goal_bar(img,
                     font,
                     font_bold,
                     font_symbol,
                     stats,
-                    &goals[0],
+                    goal_cfg,
                     layout,
                     s.i(MARGIN),
                     full_w,
@@ -383,49 +440,68 @@ fn draw_sport_bars(img: &mut RgbImage,
                     s.f(16.0),
                     s.f(16.0),
                     s.f(22.0),
-                    true,
+                    show_label,
                     y,
                     s);
       y += layout.bar_section_h;
+    }
+  } else {
+    // Landscape with 3+ goals: first full-width, rest half-width
+    draw_goal_bar(img,
+                  font,
+                  font_bold,
+                  font_symbol,
+                  stats,
+                  &goals[0],
+                  layout,
+                  s.i(MARGIN),
+                  full_w,
+                  s.f(18.0),
+                  s.f(16.0),
+                  s.f(16.0),
+                  s.f(22.0),
+                  true,
+                  y,
+                  s);
+    y += layout.bar_section_h;
 
-      // 2nd and 3rd: half-width side by side
-      let half_w = (full_w - s.u(HALF_BAR_GAP)) / 2;
-      let right_x = s.i(MARGIN) + half_w as i32 + s.u(HALF_BAR_GAP) as i32;
+    // 2nd and 3rd: half-width side by side
+    let half_w = (full_w - s.u(HALF_BAR_GAP)) / 2;
+    let right_x = s.i(MARGIN) + half_w as i32 + s.u(HALF_BAR_GAP) as i32;
 
-      draw_goal_bar(img,
-                    font,
-                    font_bold,
-                    font_symbol,
-                    stats,
-                    &goals[1],
-                    layout,
-                    s.i(MARGIN),
-                    half_w,
-                    s.f(18.0),
-                    s.f(16.0),
-                    s.f(16.0),
-                    s.f(22.0),
-                    false,
-                    y,
-                    s);
-      draw_goal_bar(img,
-                    font,
-                    font_bold,
-                    font_symbol,
-                    stats,
-                    &goals[2],
-                    layout,
-                    right_x,
-                    half_w,
-                    s.f(18.0),
-                    s.f(16.0),
-                    s.f(16.0),
-                    s.f(22.0),
-                    false,
-                    y,
-                    s);
-      y += layout.bar_section_h;
-    },
+    draw_goal_bar(img,
+                  font,
+                  font_bold,
+                  font_symbol,
+                  stats,
+                  &goals[1],
+                  layout,
+                  s.i(MARGIN),
+                  half_w,
+                  s.f(18.0),
+                  s.f(16.0),
+                  s.f(16.0),
+                  s.f(22.0),
+                  false,
+                  y,
+                  s);
+    draw_goal_bar(img,
+                  font,
+                  font_bold,
+                  font_symbol,
+                  stats,
+                  &goals[2],
+                  layout,
+                  right_x,
+                  half_w,
+                  s.f(18.0),
+                  s.f(16.0),
+                  s.f(16.0),
+                  s.f(22.0),
+                  false,
+                  y,
+                  s);
+    y += layout.bar_section_h;
   }
 
   y
@@ -558,10 +634,11 @@ fn draw_totals_row(img: &mut RgbImage,
                    font_bold: &FontRef,
                    stats: &DashboardStats,
                    y_start: i32,
+                   c: Canvas,
                    s: Scale)
                    -> i32 {
   const TOTALS: &str = "TOTALS";
-  let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
+  let content_w = (s.u(c.w) as i32 - 2 * s.i(MARGIN)) as u32;
 
   // Extra space before separator
   let sep_y = y_start + s.i(8);
@@ -603,6 +680,79 @@ fn draw_totals_row(img: &mut RgbImage,
 }
 
 // --- Longest / Fastest split ---
+
+/// Draw the LONGEST entries starting at (x, y). Returns y after the last entry.
+fn draw_longest_entries(img: &mut RgbImage,
+                        font: &FontRef,
+                        font_bold: &FontRef,
+                        font_emoji: &FontRef,
+                        stats: &DashboardStats,
+                        layout: &Layout,
+                        x: i32,
+                        mut y: i32,
+                        s: Scale)
+                        -> i32 {
+  let detail_sz = PxScale::from(layout.lf_detail_font);
+  let name_sz = PxScale::from(layout.lf_name_font);
+  let text_x = x + s.u(ICON_SZ) as i32 + s.i(12);
+
+  for sp in &stats.sports {
+    let is_mtb = sp.longest.as_ref().is_some_and(|l| l.is_mtb);
+    icons::draw_sport_icon(img, (x + s.i(4)) as u32, y as u32, sp.sport, is_mtb, BLACK, s.factor());
+    if let Some(ref longest) = sp.longest {
+      let line1 = format!("{:.1}km  ·  {}  ·  {}",
+                          longest.distance_km, longest.moving_time_display, longest.pace_or_speed);
+      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
+      draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
+    } else if stats.show_all_sports {
+      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font, "—");
+    }
+    y += layout.lf_entry_h;
+  }
+  y
+}
+
+/// Draw the FASTEST entries starting at (x, y). Returns y after the last entry.
+fn draw_fastest_entries(img: &mut RgbImage,
+                        font: &FontRef,
+                        font_bold: &FontRef,
+                        font_emoji: &FontRef,
+                        stats: &DashboardStats,
+                        layout: &Layout,
+                        x: i32,
+                        mut y: i32,
+                        s: Scale)
+                        -> i32 {
+  let detail_sz = PxScale::from(layout.lf_detail_font);
+  let name_sz = PxScale::from(layout.lf_name_font);
+  let text_x = x + s.u(ICON_SZ) as i32 + s.i(12);
+
+  for rb in &stats.run_race_bests {
+    icons::draw_runner(img, (x + s.i(4)) as u32, y as u32, BLACK, s.factor());
+    if let (Some(pace), Some(dist), Some(time)) =
+      (&rb.pace, rb.distance_km, &rb.moving_time_display)
+    {
+      let line1 = format!("{}  -  {}  ·  {}", rb.label, pace, time);
+      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      if dist > rb.target_km * 1.1 {
+        let bold_w = measure_text_width(font_bold, detail_sz, &line1) as i32;
+        let suffix = format!("  ·  ({:.1}km)", dist);
+        draw_text_mut(img, BLACK, text_x + bold_w, y + s.i(2), detail_sz, font, &suffix);
+      }
+      let name = rb.name.as_deref().unwrap_or("—");
+      let date = rb.date.as_deref().unwrap_or("—");
+      let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
+      draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
+    } else {
+      let line1 = format!("{}  —", rb.label);
+      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+    }
+    y += layout.lf_entry_h;
+  }
+  y
+}
+
 fn draw_longest_fastest(img: &mut RgbImage,
                         font: &FontRef,
                         font_bold: &FontRef,
@@ -610,10 +760,11 @@ fn draw_longest_fastest(img: &mut RgbImage,
                         stats: &DashboardStats,
                         y_start: i32,
                         layout: &Layout,
+                        c: Canvas,
+                        orientation: Orientation,
                         s: Scale)
                         -> i32 {
-  let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
-  let half_w = content_w / 2;
+  let content_w = (s.u(c.w) as i32 - 2 * s.i(MARGIN)) as u32;
 
   let sep_y = y_start + s.i(6);
   draw_filled_rect_mut(img,
@@ -621,119 +772,107 @@ fn draw_longest_fastest(img: &mut RgbImage,
                        BLACK);
 
   let y = sep_y + s.i(8);
-  let detail_sz = PxScale::from(layout.lf_detail_font);
-  let name_sz = PxScale::from(layout.lf_name_font);
-  let entry_h = layout.lf_entry_h;
-
-  // Left: LONGEST (ruler icon in black for contrast on e-paper)
   let section_title_scale = s.px(TITLE_FONT_SZ);
-  icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
-  draw_text_mut(img,
-                TITLE_COLOR,
-                s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
-                y,
-                section_title_scale,
-                font_bold,
-                "LONGEST");
 
-  let mut left_y = y + s.i(26);
-  for sp in &stats.sports {
-    let is_mtb = sp.longest.as_ref().is_some_and(|l| l.is_mtb);
-    icons::draw_sport_icon(img,
-                           (s.i(MARGIN) + s.i(4)) as u32,
-                           left_y as u32,
-                           sp.sport,
-                           is_mtb,
-                           BLACK,
-                           s.factor());
-    if let Some(ref longest) = sp.longest {
-      let line1 = format!("{:.1}km  ·  {}  ·  {}",
-                          longest.distance_km, longest.moving_time_display, longest.pace_or_speed);
+  match orientation {
+    Orientation::Landscape => {
+      let half_w = content_w / 2;
+
+      // Left: LONGEST
+      icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
       draw_text_mut(img,
-                    BLACK,
-                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
-                    left_y + s.i(2),
-                    detail_sz,
+                    TITLE_COLOR,
+                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                    y,
+                    section_title_scale,
                     font_bold,
-                    &line1);
-      let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
-      draw_text_with_fallback(img,
-                              BLACK,
-                              s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
-                              left_y + s.i(22),
-                              name_sz,
-                              font,
-                              font_emoji,
-                              &line2);
-    } else if stats.show_all_sports {
+                    "LONGEST");
+      let left_y = draw_longest_entries(img,
+                                        font,
+                                        font_bold,
+                                        font_emoji,
+                                        stats,
+                                        layout,
+                                        s.i(MARGIN),
+                                        y + s.i(26),
+                                        s);
+
+      // Right: FASTEST
+      let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
+      icons::draw_zap(img, right_x as u32, y as u32, TITLE_COLOR, s.factor());
       draw_text_mut(img,
-                    BLACK,
-                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(12),
-                    left_y + s.i(2),
-                    detail_sz,
-                    font,
-                    "—");
-    }
-    left_y += entry_h;
-  }
-
-  // Right: FASTEST (zap icon, run race bests — always 3 buckets)
-  let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
-  icons::draw_zap(img, right_x as u32, y as u32, TITLE_COLOR, s.factor());
-  draw_text_mut(img,
-                TITLE_COLOR,
-                right_x + s.u(ICON_SZ) as i32 + s.i(4),
-                y,
-                section_title_scale,
-                font_bold,
-                "FASTEST");
-
-  let mut right_y = y + s.i(26);
-
-  for rb in &stats.run_race_bests {
-    icons::draw_runner(img, (right_x + s.i(4)) as u32, right_y as u32, BLACK, s.factor());
-    if let (Some(pace), Some(dist), Some(time)) =
-      (&rb.pace, rb.distance_km, &rb.moving_time_display)
-    {
-      let line1 = format!("{}  -  {}  ·  {}", rb.label, pace, time);
-      let text_x = right_x + s.u(ICON_SZ) as i32 + s.i(12);
-      let text_y = right_y + s.i(2);
-      draw_text_mut(img, BLACK, text_x, text_y, detail_sz, font_bold, &line1);
-      if dist > rb.target_km * 1.1 {
-        let bold_w = measure_text_width(font_bold, detail_sz, &line1) as i32;
-        let suffix = format!("  ·  ({:.1}km)", dist);
-        draw_text_mut(img, BLACK, text_x + bold_w, text_y, detail_sz, font, &suffix);
-      }
-      let name = rb.name.as_deref().unwrap_or("—");
-      let date = rb.date.as_deref().unwrap_or("—");
-      let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
-      draw_text_with_fallback(img,
-                              BLACK,
-                              right_x + s.u(ICON_SZ) as i32 + s.i(12),
-                              right_y + s.i(22),
-                              name_sz,
-                              font,
-                              font_emoji,
-                              &line2);
-    } else {
-      let line1 = format!("{}  —", rb.label);
-      draw_text_mut(img,
-                    BLACK,
-                    right_x + s.u(ICON_SZ) as i32 + s.i(12),
-                    right_y + s.i(2),
-                    detail_sz,
+                    TITLE_COLOR,
+                    right_x + s.u(ICON_SZ) as i32 + s.i(4),
+                    y,
+                    section_title_scale,
                     font_bold,
-                    &line1);
-    }
-    right_y += entry_h;
+                    "FASTEST");
+      let right_y = draw_fastest_entries(img,
+                                         font,
+                                         font_bold,
+                                         font_emoji,
+                                         stats,
+                                         layout,
+                                         right_x,
+                                         y + s.i(26),
+                                         s);
+
+      // Vertical divider
+      let div_x = s.i(MARGIN) + half_w as i32;
+      let div_h = (left_y.max(right_y) - y) as u32;
+      draw_filled_rect_mut(img, Rect::at(div_x, y).of_size(s.u(DIVIDER_THICKNESS), div_h), BLACK);
+
+      left_y.max(right_y) + s.i(8)
+    },
+    Orientation::Portrait => {
+      // LONGEST full-width
+      icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
+      draw_text_mut(img,
+                    TITLE_COLOR,
+                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                    y,
+                    section_title_scale,
+                    font_bold,
+                    "LONGEST");
+      let y = draw_longest_entries(img,
+                                   font,
+                                   font_bold,
+                                   font_emoji,
+                                   stats,
+                                   layout,
+                                   s.i(MARGIN),
+                                   y + s.i(26),
+                                   s);
+
+      // Separator before FASTEST
+      let sep_y = y + s.i(4);
+      draw_filled_rect_mut(img,
+                           Rect::at(s.i(MARGIN), sep_y).of_size(content_w, s.u(DIVIDER_THICKNESS)),
+                           BLACK);
+      let y = sep_y + s.i(8);
+
+      // FASTEST full-width
+      icons::draw_zap(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
+      draw_text_mut(img,
+                    TITLE_COLOR,
+                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                    y,
+                    section_title_scale,
+                    font_bold,
+                    "FASTEST");
+      let y = draw_fastest_entries(img,
+                                   font,
+                                   font_bold,
+                                   font_emoji,
+                                   stats,
+                                   layout,
+                                   s.i(MARGIN),
+                                   y + s.i(26),
+                                   s);
+
+      y + s.i(8)
+    },
   }
-
-  // Vertical divider
-  let div_x = s.i(MARGIN) + half_w as i32;
-  let div_h = (left_y.max(right_y) - y) as u32;
-  draw_filled_rect_mut(img, Rect::at(div_x, y).of_size(s.u(DIVIDER_THICKNESS), div_h), BLACK);
-
-  left_y.max(right_y) + s.i(8)
 }
 
 // --- Last Activity ---
@@ -746,8 +885,9 @@ fn draw_last_activity(img: &mut RgbImage,
                       y_start: i32,
                       is_offline: bool,
                       config: &DisplayConfig,
+                      c: Canvas,
                       s: Scale) {
-  let content_w = (s.u(W) as i32 - 2 * s.i(MARGIN)) as u32;
+  let content_w = (s.u(c.w) as i32 - 2 * s.i(MARGIN)) as u32;
 
   let sep_y = y_start + s.i(6);
   draw_filled_rect_mut(img,
@@ -795,20 +935,26 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Polyline: starts right of the detail text lines so they don't overlap.
-    // Measure the wider of the two text lines to find the safe start.
-    let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
-    let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
-    let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
-    let polyline_x = text_right + s.i(16);
-    draw_polyline(img, stats, y, polyline_x, is_offline, config, s);
+    // Polyline placement depends on orientation
+    if config.orientation == Orientation::Portrait {
+      // Portrait: polyline below text
+      let polyline_y = y + s.i(68);
+      draw_polyline(img, stats, polyline_y, s.i(MARGIN), is_offline, config, c, s);
+    } else {
+      // Landscape: polyline right of text
+      let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
+      let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
+      let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
+      let polyline_x = text_right + s.i(16);
+      draw_polyline(img, stats, y, polyline_x, is_offline, config, c, s);
+    }
   }
 
-  // Total kudos — bottom-left corner (only when TOTALS section is hidden)
+  // Total kudos -- bottom-left corner (only when TOTALS section is hidden)
   if !config.show_totals && stats.total_kudos > 0 {
     let kudos_text = format!("TOTAL KUDOS: {}", stats.total_kudos);
     let kudos_scale = s.px(SECONDARY_FONT_SZ);
-    let kudos_y = s.u(H) as i32 - s.i(MARGIN);
+    let kudos_y = s.u(c.h) as i32 - s.i(MARGIN);
     draw_text_mut(img, SECONDARY_COLOR, s.i(MARGIN), kudos_y, kudos_scale, font_bold, &kudos_text);
   }
 }
@@ -821,6 +967,7 @@ fn draw_polyline(img: &mut RgbImage,
                  x_start: i32,
                  is_offline: bool,
                  config: &DisplayConfig,
+                 c: Canvas,
                  s: Scale) {
   let points = &stats.last_activity_polyline;
   if points.is_empty() {
@@ -835,8 +982,8 @@ fn draw_polyline(img: &mut RgbImage,
 
   let area_x = x_start.max(s.i(MARGIN)) as u32;
   let area_y = y_start as u32;
-  let area_right = s.u(W) - s.u(MARGIN as u32);
-  let area_bottom = s.u(H) - s.u(MARGIN as u32);
+  let area_right = s.u(c.w) - s.u(MARGIN as u32);
+  let area_bottom = s.u(c.h) - s.u(MARGIN as u32);
   let area_w = area_right.saturating_sub(area_x);
   let area_h = area_bottom.saturating_sub(area_y);
 
@@ -845,8 +992,8 @@ fn draw_polyline(img: &mut RgbImage,
   // reaches the battery region.  To keep the logic simple we trim from the
   // right when the bottom of the area is in the battery zone, or trim from the
   // bottom when the right edge is in the battery zone.
-  let bat_x = s.u(W) - bat_reserve_w;
-  let bat_y = s.u(H) - bat_reserve_h;
+  let bat_x = s.u(c.w) - bat_reserve_w;
+  let bat_y = s.u(c.h) - bat_reserve_h;
 
   let area_w = if area_y + area_h > bat_y {
     area_w.min(bat_x.saturating_sub(area_x))
