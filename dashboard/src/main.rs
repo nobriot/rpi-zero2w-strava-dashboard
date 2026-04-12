@@ -228,7 +228,7 @@ fn shutdown_or_sleep(power: &config::PowerConfig,
     return poll_ssh_then_shutdown(power, power_mgr, remaining);
   }
 
-  try_shutdown(power, power_mgr, remaining);
+  try_shutdown(power, power_mgr);
 
   // Still alive -- disable WiFi and software-sleep the remaining time
   power_mgr.disable_wifi();
@@ -253,7 +253,7 @@ fn poll_ssh_then_shutdown(power: &config::PowerConfig,
       log::info!("SSH sessions ended -- proceeding to sleep");
       power_mgr.disable_wifi();
       let left = remaining.saturating_sub(waited);
-      if try_shutdown(power, power_mgr, left) {
+      if try_shutdown(power, power_mgr) {
         return true;
       }
       if left > 0 {
@@ -265,17 +265,11 @@ fn poll_ssh_then_shutdown(power: &config::PowerConfig,
   false
 }
 
-/// Attempt hard shutdown: TPL5110 first, then rtcwake.
+/// Attempt hard shutdown (TPL5110 DONE signal + shutdown -h now).
 /// Returns `true` if shutdown was initiated (caller should exit).
-fn try_shutdown(power: &config::PowerConfig,
-                power_mgr: &mut power::PowerManager,
-                sleep_secs: u64)
-                -> bool {
-  if power_mgr.tpl5110_shutdown() {
-    return true;
-  }
-  if power.shutdown_after_cycle && sleep_secs > 0 && power_mgr.shutdown(sleep_secs) {
-    return true;
+fn try_shutdown(power: &config::PowerConfig, power_mgr: &mut power::PowerManager) -> bool {
+  if power.shutdown_after_cycle || power.tpl5110_done_pin.is_some() {
+    return power_mgr.shutdown();
   }
   false
 }

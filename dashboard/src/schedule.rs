@@ -15,7 +15,7 @@ pub enum SleepPlan {
 pub fn plan(power: &PowerConfig, battery: Option<&BatteryStatus>) -> SleepPlan {
   let on_power = battery.is_none() || battery.is_some_and(|b| b.is_charging());
 
-  if on_power && power.tpl5110_done_pin.is_none() {
+  if on_power && !power.shutdown_after_cycle && power.tpl5110_done_pin.is_none() {
     return SleepPlan::OnPower { sleep_secs: power.charging_interval_secs, };
   }
 
@@ -42,7 +42,9 @@ pub fn plan(power: &PowerConfig, battery: Option<&BatteryStatus>) -> SleepPlan {
 /// (TPL5110) available -- no point rendering if nobody will see it.
 pub fn should_skip_cycle(power: &PowerConfig, battery: Option<&BatteryStatus>) -> bool {
   let on_power = battery.is_none() || battery.is_some_and(|b| b.is_charging());
-  !on_power && is_quiet_time(power) && power.tpl5110_done_pin.is_some()
+  !on_power
+  && is_quiet_time(power)
+  && (power.tpl5110_done_pin.is_some() || power.shutdown_after_cycle)
 }
 
 /// Check whether the current local time falls inside the quiet window.

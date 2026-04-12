@@ -1,4 +1,3 @@
-use chrono::Utc;
 use std::fs;
 use std::process::Command;
 
@@ -148,63 +147,39 @@ impl PowerManager {
     std::thread::sleep(std::time::Duration::from_secs(5));
   }
 
-  /// Try to power off the Pi and schedule a wake-up via the DS3231 RTC.
+  /// Shut down the machine.
   ///
-  /// Returns `true` if rtcwake initiated a poweroff (caller should exit
-  /// the loop). Returns `false` if unavailable -- caller should fall back
-  /// to a low-power sleep.
-  pub fn shutdown(&self, sleep_secs: u64) -> bool {
-    if !std::path::Path::new("/dev/rtc0").exists() {
-      log::info!("rtcwake: /dev/rtc0 not available, using low-power sleep");
-      return false;
+  /// If a TPL5110 DONE pin is configured, asserts it high first so the
+  /// TPL5110 can cut power. Then falls back to `shutdown -h now`.
+  /// Returns `true` if shutdown was initiated.
+  pub fn shutdown(&mut self) -> bool {
+    log::info!("Syncing filesystems before shutdown");
+    let _ = Command::new("sync").status();
+
+    if let Some(ref mut pin) = self.tpl5110_done {
+      log::info!("TPL5110: asserting DONE high");
+      pin.set_high();
+      // TPL5110 should cut power within milliseconds.
+      // If still alive after 5s, fall through to software shutdown.
+      std::thread::sleep(std::time::Duration::from_secs(5));
+      log::warn!("TPL5110: still alive after DONE -- falling back to shutdown");
+      pin.set_low();
     }
 
-    let wake_epoch = Utc::now().timestamp() as u64 + sleep_secs;
-    log::info!("rtcwake: attempting poweroff with wake at epoch {wake_epoch} (in {sleep_secs}s)");
-
-    let result = Command::new("sudo").args(["rtcwake", "-m", "off", "-t", &wake_epoch.to_string()])
-                                     .output();
-
-    match result {
-      Ok(output) if output.status.success() => {
-        log::info!("rtcwake initiated poweroff");
+    match Command::new("sudo").args(["shutdown", "-h", "now"]).status() {
+      Ok(status) if status.success() => {
+        log::info!("shutdown -h now initiated");
         true
       },
-      Ok(output) => {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        log::info!("rtcwake unavailable ({}) -- using low-power sleep", stderr.trim());
+      Ok(status) => {
+        log::warn!("shutdown -h now failed (exit {})", status);
         false
       },
       Err(e) => {
-        log::info!("rtcwake not found ({e}) -- using low-power sleep");
+        log::warn!("Failed to run shutdown: {e}");
         false
       },
     }
-  }
-
-  /// Signal the TPL5110 to cut power by asserting the DONE pin high.
-  ///
-  /// Syncs filesystems first since the power cut is immediate and hard.
-  /// Returns `true` if the signal was sent (caller should not expect to
-  /// run further code -- power will be cut). Returns `false` if no DONE
-  /// pin was configured so the caller can fall back to rtcwake or
-  /// software sleep.
-  pub fn tpl5110_shutdown(&mut self) -> bool {
-    let Some(ref mut pin) = self.tpl5110_done else {
-      return false;
-    };
-
-    log::info!("TPL5110: syncing filesystems before power cut");
-    let _ = Command::new("sync").status();
-
-    log::info!("TPL5110: asserting DONE high");
-    pin.set_high();
-    // TPL5110 should cut power within milliseconds.
-    // If still alive after 5s, it did not work.
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    log::error!("TPL5110: still alive after DONE -- power was not cut");
-    pin.set_low();
-    false
   }
 
   fn set_bluetooth(&mut self, enable: bool) {
@@ -368,11 +343,9 @@ mod tests {
   }
 
   #[test]
-  fn shutdown_returns_false_without_rtc() {
-    // On dev machines without /dev/rtc0, shutdown should return false
-    let pm = PowerManager::new(None);
-    if !std::path::Path::new("/dev/rtc0").exists() {
-      assert!(!pm.shutdown(60));
-    }
+  fn shutdown_returns_false_on_dev_machine() {
+    // On dev machines, shutdown -h now should fail (no sudo/permissions)
+    let mut pm = PowerManager::new(None);
+    assert!(!pm.shutdown());
   }
 }
