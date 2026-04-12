@@ -140,19 +140,25 @@ lint:
 cross:
     cross build --release --target aarch64-unknown-linux-gnu
 
-# Cross-compile and deploy to RPi (e.g. just deploy pi@192.168.0.45)
-deploy host:
+# Cross-compile and deploy to RPi, optionally deploying a config first
+# Usage: just deploy pi@192.168.0.54
+#        just deploy pi@192.168.0.45 tests/sabrina.toml
+deploy host config="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{config}}" ]; then
+        echo "Deploying config {{config}} to {{host}}..."
+        ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'
+        scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml
+        echo "Config deployed."
+    fi
+    echo "Cross-compiling..."
     cross build --release --target aarch64-unknown-linux-gnu
+    echo "Deploying binary to {{host}}..."
     scp target/aarch64-unknown-linux-gnu/release/strava-dashboard {{host}}:/tmp/strava-dashboard
     scp dist/strava-dashboard.service {{host}}:/tmp/strava-dashboard.service
     ssh {{host}} 'sudo mv /tmp/strava-dashboard /usr/local/bin/strava-dashboard && sudo mv /tmp/strava-dashboard.service /etc/systemd/system/strava-dashboard.service && sudo systemctl daemon-reload && sudo systemctl restart strava-dashboard'
-    @echo "Deployed and restarted strava-dashboard on {{host}}"
-
-# Deploy a config file as default config on RPi (e.g. just deploy-config pi@rpi tests/nicolas.toml)
-deploy-config host config:
-    ssh {{host}} 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'
-    scp {{config}} {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml
-    @echo "Config deployed to {{host}}:~/.config/rpi-zero2w-strava-dashboard/config.toml"
+    echo "Deployed and restarted strava-dashboard on {{host}}"
 
 # Build the mdBook documentation
 book:
