@@ -28,7 +28,7 @@ show_longest_fastest = true
 flip = true
 
 # Show debug info (last sync time) on the dashboard. Default: false.
-debug = false
+debug = true
 
 # Display orientation: "landscape" (800x480) or "portrait" (480x800).
 # Portrait stacks all sections vertically. Default: landscape.

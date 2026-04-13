@@ -292,18 +292,18 @@ fn draw_battery_indicator(img: &mut RgbImage,
 
   if debug {
     let now = chrono::Local::now();
-    let sync_text = format!("synced {}", now.format("%d/%m %H:%M"));
+    let sync_text = now.format("%d/%m %H:%M").to_string();
     let sync_scale = s.px(12.0);
     let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
     let sync_x = s.u(c.w) as i32 - sync_w;
-    let sync_y = s.u(c.h) as i32 - s.i(56);
+    let sync_y = s.u(c.h) as i32 - s.i(40);
     draw_thickened(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text, s.font_extra);
   }
 
   if is_offline {
     let label = "OFFLINE";
     let label_scale = s.px(14.0);
-    let y_offline = s.u(c.h) as i32 - s.i(40);
+    let y_offline = s.u(c.h) as i32 - s.i(56);
     draw_thickened(img, BLACK, x, y_offline, label_scale, font_bold, label, s.bold_extra);
   }
 
