@@ -111,6 +111,7 @@ fn draw_thickened(img: &mut RgbImage,
   draw_text_mut(img, color, x, y, scale, font, text);
   for i in 1..=extra {
     draw_text_mut(img, color, x + i as i32, y, scale, font, text);
+    draw_text_mut(img, color, x, y - i as i32, scale, font, text);
   }
 }
 
