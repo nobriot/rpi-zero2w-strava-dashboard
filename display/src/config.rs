@@ -57,6 +57,16 @@ pub struct DisplayConfig {
   /// Set to "portrait" for vertical layout (480x800).
   #[serde(default)]
   pub orientation: Orientation,
+
+  /// Extra thickness for regular font (0 = normal, 1 = semi-bold, 2 =
+  /// bold-ish). Each level draws the text with an additional 1px horizontal
+  /// offset. Default: 0.
+  #[serde(default)]
+  pub font_thickness: u8,
+
+  /// Extra thickness for bold font. Same principle. Default: 0.
+  #[serde(default)]
+  pub bold_font_thickness: u8,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -91,7 +101,9 @@ impl Default for DisplayConfig {
            show_longest_fastest: default_show_longest_fastest(),
            flip:                 default_flip(),
            debug:                false,
-           orientation:          Orientation::default(), }
+           orientation:          Orientation::default(),
+           font_thickness:       0,
+           bold_font_thickness:  0, }
   }
 }
 

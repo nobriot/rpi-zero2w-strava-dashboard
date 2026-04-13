@@ -185,7 +185,7 @@ quiet_hours = { start = 22, end = 7 }
 shutdown_after_cycle = false
 charging_interval_secs = 1200
 linger_secs = 120
-ssh_inhibit_below_percent = 30
+ssh_inhibit_below_percent = 60
 ```
 
 ## Applying changes

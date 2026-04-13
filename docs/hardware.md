@@ -54,7 +54,8 @@ The board includes an INA219 current/voltage sensor on the I2C bus for battery m
 
 ## RTC: DS3231 (Optional)
 
-The board has a DS3231 real-time clock on I2C. Not currently used by the dashboard — the Pi syncs time via NTP when connected to WiFi.
+The board has a DS3231 real-time clock on I2C.
+Not currently used by the dashboard — the Pi syncs time via NTP when connected to WiFi.
 
 ## Enabling SPI and I2C
 

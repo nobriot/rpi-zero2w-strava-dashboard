@@ -55,33 +55,62 @@ const MAIN_FONT_SZ: f32 = 18.0;
 const SECONDARY_COLOR: Rgb<u8> = BLACK;
 const SECONDARY_FONT_SZ: f32 = 18.0;
 
-/// Resolution scale factor for rendering.
+/// Resolution scale factor for rendering, plus font thickness overrides.
 #[derive(Clone, Copy)]
-pub struct Scale(u32);
+pub struct Scale {
+  factor:     u32,
+  font_extra: u8,
+  bold_extra: u8,
+}
 
 impl Scale {
   pub fn new(factor: u32) -> Self {
-    Scale(factor.max(1))
+    Scale { factor:     factor.max(1),
+            font_extra: 0,
+            bold_extra: 0, }
+  }
+
+  pub fn with_thickness(factor: u32, font_extra: u8, bold_extra: u8) -> Self {
+    Scale { factor: factor.max(1),
+            font_extra,
+            bold_extra }
   }
 
   pub fn u(&self, v: u32) -> u32 {
-    v * self.0
+    v * self.factor
   }
 
   pub fn i(&self, v: i32) -> i32 {
-    v * self.0 as i32
+    v * self.factor as i32
   }
 
   pub fn f(&self, v: f32) -> f32 {
-    v * self.0 as f32
+    v * self.factor as f32
   }
 
   pub fn px(&self, v: f32) -> PxScale {
-    PxScale::from(v * self.0 as f32)
+    PxScale::from(v * self.factor as f32)
   }
 
   pub fn factor(&self) -> u32 {
-    self.0
+    self.factor
+  }
+}
+
+/// Draw text with optional extra thickness by repeating with horizontal
+/// offsets. `extra` = 0 means normal single draw; 1 = draw original + 1px
+/// right; etc.
+fn draw_thickened(img: &mut RgbImage,
+                  color: Rgb<u8>,
+                  x: i32,
+                  y: i32,
+                  scale: PxScale,
+                  font: &FontRef,
+                  text: &str,
+                  extra: u8) {
+  draw_text_mut(img, color, x, y, scale, font, text);
+  for i in 1..=extra {
+    draw_text_mut(img, color, x + i as i32, y, scale, font, text);
   }
 }
 
@@ -187,6 +216,7 @@ pub fn render_dashboard(stats: &DashboardStats,
                         is_offline: bool,
                         s: Scale)
                         -> RgbImage {
+  let s = Scale::with_thickness(s.factor(), config.font_thickness, config.bold_font_thickness);
   let c = Canvas::from_orientation(config.orientation);
   let mut img = RgbImage::from_pixel(s.u(c.w), s.u(c.h), WHITE);
 
@@ -266,18 +296,18 @@ fn draw_battery_indicator(img: &mut RgbImage,
     let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
     let sync_x = s.u(c.w) as i32 - sync_w;
     let sync_y = s.u(c.h) as i32 - s.i(56);
-    draw_text_mut(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text);
+    draw_thickened(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text, s.font_extra);
   }
 
   if is_offline {
     let label = "OFFLINE";
     let label_scale = s.px(14.0);
     let y_offline = s.u(c.h) as i32 - s.i(40);
-    draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
+    draw_thickened(img, BLACK, x, y_offline, label_scale, font_bold, label, s.bold_extra);
   }
 
   let y = s.u(c.h) as i32 - s.i(MARGIN);
-  draw_text_mut(img, BLACK, x, y, text_scale, font_bold, &bat_text);
+  draw_thickened(img, BLACK, x, y, text_scale, font_bold, &bat_text, s.bold_extra);
   icons::draw_battery(img,
                       (x + text_w + gap) as u32,
                       (y + 2) as u32,
@@ -317,7 +347,7 @@ fn draw_header(img: &mut RgbImage,
   }
 
   let title_x = ((available - title_w) / 2.0) as i32;
-  draw_text_mut(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title);
+  draw_thickened(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title, s.bold_extra);
 
   if show_logo {
     draw_powered_by_logo(img, c, s);
@@ -544,13 +574,14 @@ fn draw_goal_bar(img: &mut RgbImage,
     format!("{:.0} km", ytd_km)
   };
   let left_scale = PxScale::from(left_font_sz);
-  draw_text_mut(img,
-                BLACK,
-                x + s.u(ICON_SZ) as i32 + s.i(6),
-                y + s.i(2),
-                left_scale,
-                font_bold,
-                &left_text);
+  draw_thickened(img,
+                 BLACK,
+                 x + s.u(ICON_SZ) as i32 + s.i(6),
+                 y + s.i(2),
+                 left_scale,
+                 font_bold,
+                 &left_text,
+                 s.bold_extra);
 
   // Right: flag + goal (green when reached)
   let goal_reached = ytd_km >= goal;
@@ -561,14 +592,22 @@ fn draw_goal_bar(img: &mut RgbImage,
   let flag_scale = PxScale::from(flag_font_sz);
   let flag_w = measure_text_width(font_symbol, flag_scale, "\u{F11E} ") as i32;
   let flag_x = x + bar_w as i32 - goal_w - flag_w - s.i(4);
-  draw_text_mut(img, flag_color, flag_x, y + s.i(1), flag_scale, font_symbol, "\u{F11E} ");
-  draw_text_mut(img,
-                flag_color,
-                x + bar_w as i32 - goal_w,
-                y + s.i(3),
-                goal_scale,
-                font,
-                &goal_text);
+  draw_thickened(img,
+                 flag_color,
+                 flag_x,
+                 y + s.i(1),
+                 flag_scale,
+                 font_symbol,
+                 "\u{F11E} ",
+                 s.font_extra);
+  draw_thickened(img,
+                 flag_color,
+                 x + bar_w as i32 - goal_w,
+                 y + s.i(3),
+                 goal_scale,
+                 font,
+                 &goal_text,
+                 s.font_extra);
 
   // Center: time + count (condensed for narrow bars)
   let center_scale = PxScale::from(center_font_sz);
@@ -589,14 +628,21 @@ fn draw_goal_bar(img: &mut RgbImage,
 
   if available >= center_w {
     let center_x = left_end + (available - center_w) / 2;
-    draw_text_mut(img, BLACK, center_x, y + s.i(3), center_scale, font, &center_text);
+    draw_thickened(img,
+                   BLACK,
+                   center_x,
+                   y + s.i(3),
+                   center_scale,
+                   font,
+                   &center_text,
+                   s.font_extra);
   } else {
     // Fall back to count only for very narrow bars
     let short_text = format!("{} {}", ytd_count, noun);
     let short_w = measure_text_width(font, center_scale, &short_text) as i32;
     if available >= short_w {
       let cx = left_end + (available - short_w) / 2;
-      draw_text_mut(img, BLACK, cx, y + s.i(3), center_scale, font, &short_text);
+      draw_thickened(img, BLACK, cx, y + s.i(3), center_scale, font, &short_text, s.font_extra);
     }
   }
 
@@ -650,13 +696,14 @@ fn draw_totals_row(img: &mut RgbImage,
   let y = sep_y + s.i(10);
   icons::draw_bar_chart(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
   let icon_w = s.u(ICON_SZ) as i32 + s.i(4);
-  draw_text_mut(img,
-                TITLE_COLOR,
-                s.i(MARGIN) + icon_w,
-                y,
-                s.px(TITLE_FONT_SZ),
-                font_bold,
-                TOTALS);
+  draw_thickened(img,
+                 TITLE_COLOR,
+                 s.i(MARGIN) + icon_w,
+                 y,
+                 s.px(TITLE_FONT_SZ),
+                 font_bold,
+                 TOTALS,
+                 s.bold_extra);
 
   let center_text = format!("{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
                             stats.activity_count,
@@ -667,13 +714,14 @@ fn draw_totals_row(img: &mut RgbImage,
   let title_w = measure_text_width(font_bold, s.px(TITLE_FONT_SZ), TOTALS) as i32;
   let stats_x = s.i(MARGIN) + icon_w + title_w + s.i(20);
   let baseline_offset = s.i(4);
-  draw_text_mut(img,
-                SECONDARY_COLOR,
-                stats_x,
-                y + baseline_offset,
-                s.px(SECONDARY_FONT_SZ),
-                font,
-                &center_text);
+  draw_thickened(img,
+                 SECONDARY_COLOR,
+                 stats_x,
+                 y + baseline_offset,
+                 s.px(SECONDARY_FONT_SZ),
+                 font,
+                 &center_text,
+                 s.font_extra);
 
   // Extra space after
   y + s.i(32)
@@ -702,11 +750,19 @@ fn draw_longest_entries(img: &mut RgbImage,
     if let Some(ref longest) = sp.longest {
       let line1 = format!("{:.1}km  ·  {}  ·  {}",
                           longest.distance_km, longest.moving_time_display, longest.pace_or_speed);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      draw_thickened(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1, s.bold_extra);
       let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
-      draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
+      draw_text_with_fallback(img,
+                              BLACK,
+                              text_x,
+                              y + s.i(22),
+                              name_sz,
+                              font,
+                              font_emoji,
+                              &line2,
+                              s.font_extra);
     } else if stats.show_all_sports {
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font, "—");
+      draw_thickened(img, BLACK, text_x, y + s.i(2), detail_sz, font, "—", s.font_extra);
     }
     y += layout.lf_entry_h;
   }
@@ -734,19 +790,34 @@ fn draw_fastest_entries(img: &mut RgbImage,
       (&rb.pace, rb.distance_km, &rb.moving_time_display)
     {
       let line1 = format!("{}  -  {}  ·  {}", rb.label, pace, time);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      draw_thickened(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1, s.bold_extra);
       if dist > rb.target_km * 1.1 {
         let bold_w = measure_text_width(font_bold, detail_sz, &line1) as i32;
         let suffix = format!("  ·  ({:.1}km)", dist);
-        draw_text_mut(img, BLACK, text_x + bold_w, y + s.i(2), detail_sz, font, &suffix);
+        draw_thickened(img,
+                       BLACK,
+                       text_x + bold_w,
+                       y + s.i(2),
+                       detail_sz,
+                       font,
+                       &suffix,
+                       s.font_extra);
       }
       let name = rb.name.as_deref().unwrap_or("—");
       let date = rb.date.as_deref().unwrap_or("—");
       let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
-      draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
+      draw_text_with_fallback(img,
+                              BLACK,
+                              text_x,
+                              y + s.i(22),
+                              name_sz,
+                              font,
+                              font_emoji,
+                              &line2,
+                              s.font_extra);
     } else {
       let line1 = format!("{}  —", rb.label);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      draw_thickened(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1, s.bold_extra);
     }
     y += layout.lf_entry_h;
   }
@@ -780,13 +851,14 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
       // Left: LONGEST
       icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
-      draw_text_mut(img,
-                    TITLE_COLOR,
-                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
-                    y,
-                    section_title_scale,
-                    font_bold,
-                    "LONGEST");
+      draw_thickened(img,
+                     TITLE_COLOR,
+                     s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                     y,
+                     section_title_scale,
+                     font_bold,
+                     "LONGEST",
+                     s.bold_extra);
       let left_y = draw_longest_entries(img,
                                         font,
                                         font_bold,
@@ -800,13 +872,14 @@ fn draw_longest_fastest(img: &mut RgbImage,
       // Right: FASTEST
       let right_x = s.i(MARGIN) + half_w as i32 + s.i(12);
       icons::draw_zap(img, right_x as u32, y as u32, TITLE_COLOR, s.factor());
-      draw_text_mut(img,
-                    TITLE_COLOR,
-                    right_x + s.u(ICON_SZ) as i32 + s.i(4),
-                    y,
-                    section_title_scale,
-                    font_bold,
-                    "FASTEST");
+      draw_thickened(img,
+                     TITLE_COLOR,
+                     right_x + s.u(ICON_SZ) as i32 + s.i(4),
+                     y,
+                     section_title_scale,
+                     font_bold,
+                     "FASTEST",
+                     s.bold_extra);
       let right_y = draw_fastest_entries(img,
                                          font,
                                          font_bold,
@@ -827,13 +900,14 @@ fn draw_longest_fastest(img: &mut RgbImage,
     Orientation::Portrait => {
       // LONGEST full-width
       icons::draw_ruler(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
-      draw_text_mut(img,
-                    TITLE_COLOR,
-                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
-                    y,
-                    section_title_scale,
-                    font_bold,
-                    "LONGEST");
+      draw_thickened(img,
+                     TITLE_COLOR,
+                     s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                     y,
+                     section_title_scale,
+                     font_bold,
+                     "LONGEST",
+                     s.bold_extra);
       let y = draw_longest_entries(img,
                                    font,
                                    font_bold,
@@ -853,13 +927,14 @@ fn draw_longest_fastest(img: &mut RgbImage,
 
       // FASTEST full-width
       icons::draw_zap(img, s.u(MARGIN as u32), y as u32, TITLE_COLOR, s.factor());
-      draw_text_mut(img,
-                    TITLE_COLOR,
-                    s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
-                    y,
-                    section_title_scale,
-                    font_bold,
-                    "FASTEST");
+      draw_thickened(img,
+                     TITLE_COLOR,
+                     s.i(MARGIN) + s.u(ICON_SZ) as i32 + s.i(4),
+                     y,
+                     section_title_scale,
+                     font_bold,
+                     "FASTEST",
+                     s.bold_extra);
       let y = draw_fastest_entries(img,
                                    font,
                                    font_bold,
@@ -898,13 +973,14 @@ fn draw_last_activity(img: &mut RgbImage,
 
   if let Some(ref last) = stats.last_activity {
     // "LAST ACTIVITY" title
-    draw_text_mut(img,
-                  TITLE_COLOR,
-                  s.i(MARGIN),
-                  y,
-                  s.px(TITLE_FONT_SZ),
-                  font_bold,
-                  "LAST ACTIVITY");
+    draw_thickened(img,
+                   TITLE_COLOR,
+                   s.i(MARGIN),
+                   y,
+                   s.px(TITLE_FONT_SZ),
+                   font_bold,
+                   "LAST ACTIVITY",
+                   s.bold_extra);
 
     // First line: sport icon + name · date
     let line1_x = s.i(MARGIN);
@@ -923,17 +999,19 @@ fn draw_last_activity(img: &mut RgbImage,
                             s.px(MAIN_FONT_SZ),
                             font_bold,
                             font_emoji,
-                            &line1);
+                            &line1,
+                            s.bold_extra);
 
     let line2 = format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
                         last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos);
-    draw_text_mut(img,
-                  SECONDARY_COLOR,
-                  line1_x + s.u(ICON_SZ) as i32 + s.i(6),
-                  y + s.i(48),
-                  s.px(SECONDARY_FONT_SZ),
-                  font,
-                  &line2);
+    draw_thickened(img,
+                   SECONDARY_COLOR,
+                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
+                   y + s.i(48),
+                   s.px(SECONDARY_FONT_SZ),
+                   font,
+                   &line2,
+                   s.font_extra);
 
     // Polyline placement depends on orientation
     if config.orientation == Orientation::Portrait {
@@ -955,7 +1033,14 @@ fn draw_last_activity(img: &mut RgbImage,
     let kudos_text = format!("TOTAL KUDOS: {}", stats.total_kudos);
     let kudos_scale = s.px(SECONDARY_FONT_SZ);
     let kudos_y = s.u(c.h) as i32 - s.i(MARGIN);
-    draw_text_mut(img, SECONDARY_COLOR, s.i(MARGIN), kudos_y, kudos_scale, font_bold, &kudos_text);
+    draw_thickened(img,
+                   SECONDARY_COLOR,
+                   s.i(MARGIN),
+                   kudos_y,
+                   kudos_scale,
+                   font_bold,
+                   &kudos_text,
+                   s.bold_extra);
   }
 }
 
@@ -1116,7 +1201,8 @@ fn draw_text_with_fallback(img: &mut RgbImage,
                            scale: PxScale,
                            font: &FontRef,
                            font_emoji: &FontRef,
-                           text: &str) {
+                           text: &str,
+                           extra: u8) {
   let notdef = ab_glyph::GlyphId(0);
   let mut cursor_x = x as f32;
 
@@ -1124,13 +1210,13 @@ fn draw_text_with_fallback(img: &mut RgbImage,
     let gid = font.glyph_id(c);
     if gid != notdef {
       let s: String = c.to_string();
-      draw_text_mut(img, color, cursor_x as i32, y, scale, font, &s);
+      draw_thickened(img, color, cursor_x as i32, y, scale, font, &s, extra);
       cursor_x += font.as_scaled(scale).h_advance(gid);
     } else {
       let emoji_gid = font_emoji.glyph_id(c);
       if emoji_gid != notdef {
         let s: String = c.to_string();
-        draw_text_mut(img, color, cursor_x as i32, y, scale, font_emoji, &s);
+        draw_thickened(img, color, cursor_x as i32, y, scale, font_emoji, &s, extra);
         cursor_x += font_emoji.as_scaled(scale).h_advance(emoji_gid);
       }
       // else: skip the character entirely (no more squares)

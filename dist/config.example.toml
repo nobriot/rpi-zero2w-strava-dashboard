@@ -37,6 +37,11 @@ debug = false
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4
 
+# Extra font thickness (0 = normal, 1 = semi-bold, 2 = bold-ish).
+# Each level re-draws text with an additional 1px horizontal offset.
+font_thickness = 1
+bold_font_thickness = 0
+
 # Yearly distance goals (km). Used for progress bars on the dashboard.
 # Define 1-3 goals. Order matters: first sport is a full-width bar on the top
 # row. With 3 sports, the 2nd and 3rd share the second row as half-width bars.
@@ -82,8 +87,8 @@ charging_interval_secs = 1200
 # down. Gives a window for SSH access. Default: 120 (2 minutes)
 linger_secs = 120
 
-# Don't rtcwake-shutdown while SSH sessions are active unless battery drops
-# below this percentage. Set to 0 to disable SSH detection. Default: 30
+# Don't shutdown while SSH sessions are active unless battery drops
+# below this percentage. Set to 0 to disable SSH detection. Default: 60
 ssh_inhibit_below_percent = 60
 
 # Write the recommended /boot/firmware/config.txt for the RPi
