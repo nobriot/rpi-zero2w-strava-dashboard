@@ -347,11 +347,21 @@ fn draw_header(img: &mut RgbImage,
     draw_avatar(img, bytes, s);
   }
 
-  let title_x = ((available - title_w) / 2.0) as i32;
-  draw_thickened(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title, s.bold_extra);
-
-  if show_logo {
-    draw_powered_by_logo(img, c, s);
+  if orientation == Orientation::Portrait {
+    let name = stats.athlete_first_name.as_str();
+    let year_text = format!("{}", year);
+    let name_w = measure_text_width(font_bold, title_scale, name);
+    let year_w = measure_text_width(font_bold, title_scale, &year_text);
+    let name_x = ((available - name_w) / 2.0) as i32;
+    let year_x = (available - year_w) as i32 - s.i(5);
+    draw_thickened(img, WHITE, name_x, s.i(6), title_scale, font_bold, name, s.bold_extra);
+    draw_thickened(img, WHITE, year_x, s.i(6), title_scale, font_bold, &year_text, s.bold_extra);
+  } else {
+    let title_x = ((available - title_w) / 2.0) as i32;
+    draw_thickened(img, WHITE, title_x, s.i(6), title_scale, font_bold, &title, s.bold_extra);
+    if show_logo {
+      draw_powered_by_logo(img, c, s);
+    }
   }
 }
 
