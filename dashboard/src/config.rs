@@ -68,8 +68,8 @@ pub struct PowerConfig {
   #[serde(default)]
   pub quiet_hours: QuietHours,
 
-  /// Enable rtcwake poweroff between refresh cycles for maximum battery
-  /// savings. Requires DS3231 RTC with INT/SQW wired to GPIO4.
+  /// Power off between refresh cycles for maximum battery savings.
+  /// The user must power-cycle the device manually to restart.
   /// Default: false.
   #[serde(default)]
   pub shutdown_after_cycle: bool,
@@ -84,9 +84,9 @@ pub struct PowerConfig {
   #[serde(default = "default_linger")]
   pub linger_secs: u64,
 
-  /// Don't rtcwake-shutdown while SSH sessions are active unless the battery
+  /// Don't shutdown while SSH sessions are active unless the battery
   /// percentage drops below this value. Set to 0 to disable SSH detection.
-  /// Default: 30.
+  /// Default: 60.
   #[serde(default = "default_ssh_inhibit")]
   pub ssh_inhibit_below_percent: u8,
 

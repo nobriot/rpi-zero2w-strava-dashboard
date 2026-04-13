@@ -3,7 +3,7 @@
 #
 # Pings the Pi every INTERVAL seconds and logs state transitions (awake/asleep)
 # with timestamps and battery percentage. Useful for verifying that
-# [power] shutdown_after_cycle + rtcwake is working correctly.
+# [power] shutdown_after_cycle or TPL5110 is working correctly.
 #
 # Usage: bash scripts/monitor-pi-wake.sh <pi-hostname-or-ip> [interval_secs]
 #

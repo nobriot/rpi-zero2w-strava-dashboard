@@ -71,41 +71,6 @@ The INA219 chip monitors the battery over I2C (address `0x43`). It measures:
 
 The battery percentage is shown in the top-right corner of the dashboard.
 
-## Real-time clock (DS3231)
-
-The DS3231 keeps time even when the Pi is off, using a small backup battery. It
-communicates over I2C at address `0x68`.
-
-This chip is optional for the dashboard --- the Pi normally gets time from the
-internet via NTP. The RTC is useful if you want accurate time after a reboot
-in a location without WiFi.
-
-### Setup
-
-Add to `/boot/firmware/config.txt`:
-
-```ini
-dtoverlay=i2c-rtc,ds3231,wakeup-source
-```
-
-Sync time commands:
-
-```bash
-sudo hwclock -w --utc   # Save system time to RTC
-sudo hwclock -s          # Load time from RTC to system
-```
-
-### Wake-from-poweroff limitations
-
-The DS3231 has an alarm output (INT pin) that could theoretically wake the Pi
-from a powered-off state. However, on the PhotoPainter board, **this pin is not
-connected to any GPIO**. This means the DS3231 cannot wake the Pi from
-poweroff.
-
-Instead, the dashboard uses a software-based low-power sleep mode: disabling
-WiFi and HDMI between cycles, which reduces power consumption from ~120 mA to
-~50-60 mA.
-
 ## Power consumption
 
 | State | Approximate draw |

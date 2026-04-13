@@ -121,9 +121,9 @@ Set both to the same value to disable quiet hours.
 shutdown_after_cycle = false
 ```
 
-When `true`, the Pi powers off between refresh cycles via `rtcwake` and wakes
-up automatically for the next cycle. Requires a DS3231 RTC with INT/SQW wired
-to GPIO4 and the `gpio-shutdown,gpio_pin=4` overlay. Default: `false`.
+When `true`, the Pi powers off between refresh cycles. Unless a TPL5110 timer
+is configured, you will need to power-cycle the device manually to restart it.
+Default: `false`.
 
 ### Charging interval
 
@@ -150,9 +150,9 @@ down. This gives a window for SSH access. Default: **120** (2 minutes).
 ssh_inhibit_below_percent = 60
 ```
 
-When SSH sessions are active, don't rtcwake-shutdown unless the battery drops
+When SSH sessions are active, don't shutdown unless the battery drops
 below this percentage. Set to `0` to disable SSH detection entirely.
-Default: **30**.
+Default: **60**.
 
 ## Full example
 

@@ -1,6 +1,5 @@
 mod args;
 mod config;
-mod ds3231;
 mod errors;
 mod firmware;
 mod ina219;
@@ -82,9 +81,6 @@ fn prompt(label: &str) -> Result<String> {
 fn run() -> Result<()> {
   let args = Args::try_parse()?;
   logging::setup(args.log_file.as_deref());
-
-  // Clear any pending DS3231 alarm from a previous rtcwake cycle
-  ds3231::clear_alarm_if_pending();
 
   if args.auth {
     return run_auth(args.config.as_ref());
@@ -204,7 +200,7 @@ fn linger(max_secs: u64) -> u64 {
   waited
 }
 
-/// Try to shut down (TPL5110 -> rtcwake -> software sleep).
+/// Try to shut down (TPL5110 or software shutdown -> sleep).
 /// Respects SSH inhibition: if an SSH session is active and battery is
 /// above the inhibit threshold, polls until sessions end before shutting
 /// down. Returns `true` if the caller should exit the main loop (hard

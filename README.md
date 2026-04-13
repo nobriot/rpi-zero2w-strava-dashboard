@@ -21,32 +21,7 @@ though I probably micro-manage them too much.
 
 TODO:Insert a picture
 
-## RTC Notes:
-
-config.txt:
-
-```ini
-dtoverlay=i2c-rtc,ds3231,wakeup-source
-dtparam=i2c_arm=on
-```
-
-Sync time: 
-
-```bash
-sudo hwclock -w --utc
-```
-
-TPL5110 timer ? 
-Seems like a good possibility.
-
 ## TODOs
-
-Witty Pi 4 Mini ?
-Seems overkill
-https://www.digikey.dk/da/products/detail/pimoroni-ltd/witty-pi-4-mini/16716803
-
-Power management: Disable everything (HDMI; USB; bluetooth)
-Probably makes sense to install a pre-made /boot/firmware/config.txt that we include_str! in the program
 
 
 ## What It Does

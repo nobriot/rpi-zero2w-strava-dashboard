@@ -53,21 +53,6 @@ dtparam=spi=on
 dtparam=i2c_arm=on
 ```
 
-### Optional: Enable the real-time clock
-
-If you want the Pi to keep accurate time even without WiFi, add:
-
-```ini
-dtoverlay=i2c-rtc,ds3231,wakeup-source
-```
-
-This tells the Pi to use the DS3231 real-time clock chip on the PhotoPainter
-board. After the first boot with internet access, sync the time:
-
-```bash
-sudo hwclock -w --utc
-```
-
 ## Eject and insert
 
 Safely eject the SD card from your computer, insert it into the Raspberry Pi

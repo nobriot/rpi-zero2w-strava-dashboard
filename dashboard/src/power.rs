@@ -52,7 +52,7 @@ pub enum Mode {
 }
 
 /// Manages RPi peripheral power state (WiFi, Bluetooth, USB) and provides
-/// rtcwake shutdown.
+/// shutdown via TPL5110 or software poweroff.
 ///
 /// WiFi can be independently toggled within any mode -- `disable_wifi()` is
 /// typically called after the linger window when the radio is no longer
