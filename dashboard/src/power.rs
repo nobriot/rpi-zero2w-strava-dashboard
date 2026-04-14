@@ -1,5 +1,7 @@
+use crate::config::PowerConfig;
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
 
 /// Check whether any SSH (pseudo-terminal) sessions are currently active.
 ///
@@ -182,6 +184,92 @@ impl PowerManager {
     }
   }
 
+  /// Stay in Normal mode and sleep for `sleep_secs`. Used on external power.
+  pub fn rest_on_power(&mut self, sleep_secs: u64) {
+    self.set_normal();
+    log::info!("On power -- sleeping {sleep_secs}s before next cycle");
+    std::thread::sleep(Duration::from_secs(sleep_secs));
+  }
+
+  /// Enter low-power mode, linger for SSH, then shut down or software-sleep.
+  /// Returns `true` when a hard shutdown was initiated (caller should exit).
+  pub fn rest_on_battery(&mut self,
+                         power: &PowerConfig,
+                         sleep_secs: u64,
+                         linger_secs: u64,
+                         battery_pct: Option<u8>)
+                         -> bool {
+    self.set_low_power();
+    let lingered = linger(linger_secs);
+    let remaining = sleep_secs.saturating_sub(lingered);
+    self.shutdown_or_sleep(power, remaining, battery_pct)
+  }
+
+  /// Try to shut down (TPL5110 or software shutdown -> sleep).
+  /// Respects SSH inhibition: if an SSH session is active and battery is
+  /// above the inhibit threshold, polls until sessions end before shutting
+  /// down. Returns `true` if the caller should exit the main loop.
+  fn shutdown_or_sleep(&mut self,
+                       power: &PowerConfig,
+                       remaining: u64,
+                       battery_pct: Option<u8>)
+                       -> bool {
+    let ssh_active = has_ssh_sessions();
+    let ssh_inhibits = power.ssh_inhibit_below_percent > 0
+                       && ssh_active
+                       && battery_pct.is_none_or(|p| p > power.ssh_inhibit_below_percent);
+
+    log::info!("Power: battery={}, ssh={ssh_active}, ssh_inhibits={ssh_inhibits}, \
+                shutdown_after_cycle={}",
+               battery_pct.map_or("N/A".to_string(), |p| format!("{p}%")),
+               power.shutdown_after_cycle);
+
+    if ssh_inhibits {
+      return self.poll_ssh_then_shutdown(power, remaining);
+    }
+
+    if self.try_hard_shutdown(power) {
+      return true;
+    }
+
+    self.disable_wifi();
+    if remaining > 0 {
+      std::thread::sleep(Duration::from_secs(remaining));
+    }
+    false
+  }
+
+  /// Poll every 60s until SSH sessions end, then shut down.
+  fn poll_ssh_then_shutdown(&mut self, power: &PowerConfig, remaining: u64) -> bool {
+    log::info!("SSH inhibiting shutdown -- polling every 60s");
+    let mut waited = 0u64;
+    while waited < remaining {
+      let chunk = 60.min(remaining - waited);
+      std::thread::sleep(Duration::from_secs(chunk));
+      waited += chunk;
+      if !has_ssh_sessions() {
+        log::info!("SSH sessions ended -- proceeding to sleep");
+        self.disable_wifi();
+        let left = remaining.saturating_sub(waited);
+        if self.try_hard_shutdown(power) {
+          return true;
+        }
+        if left > 0 {
+          std::thread::sleep(Duration::from_secs(left));
+        }
+        break;
+      }
+    }
+    false
+  }
+
+  fn try_hard_shutdown(&mut self, power: &PowerConfig) -> bool {
+    if power.shutdown_after_cycle || power.tpl5110_done_pin.is_some() {
+      return self.shutdown();
+    }
+    false
+  }
+
   fn set_bluetooth(&mut self, enable: bool) {
     if enable != self.bt_blocked {
       return;
@@ -245,6 +333,27 @@ fn usb_device_names() -> Vec<String> {
            if entry.path().join("uevent").exists() { Some(name) } else { None }
          })
          .collect()
+}
+
+/// Wait up to `max_secs` for SSH access, polling every 60s.
+/// Returns the number of seconds actually waited. Ends early if no SSH
+/// sessions are detected.
+fn linger(max_secs: u64) -> u64 {
+  if max_secs == 0 {
+    return 0;
+  }
+  log::info!("Lingering {max_secs}s for SSH access...");
+  let mut waited = 0u64;
+  while waited < max_secs {
+    let chunk = 60.min(max_secs - waited);
+    std::thread::sleep(Duration::from_secs(chunk));
+    waited += chunk;
+    if waited < max_secs && !has_ssh_sessions() {
+      log::info!("No SSH sessions -- ending linger early");
+      break;
+    }
+  }
+  waited
 }
 
 /// Run `rfkill <action> <device>` and log the result.
