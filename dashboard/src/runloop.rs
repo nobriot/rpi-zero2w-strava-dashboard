@@ -7,6 +7,10 @@ use crate::schedule::{self, SleepPlan};
 
 /// Main event loop: fetch -> render -> sleep, repeat.
 pub fn run(mut config: Config, args: Args) -> Result<()> {
+  if args.kiosk {
+    return run_kiosk(config, args);
+  }
+
   let mut power_mgr = PowerManager::new(config.power.tpl5110_done_pin);
 
   loop {
@@ -33,5 +37,23 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
         }
       },
     }
+  }
+}
+
+/// Kiosk mode: no power management, no quiet hours, no e-paper.
+/// Refreshes the PNG on the charging interval, stays awake with WiFi on.
+fn run_kiosk(mut config: Config, args: Args) -> Result<()> {
+  let mut power_mgr = PowerManager::new(None);
+
+  loop {
+    cycle::run(&mut config, &args, &mut power_mgr)?;
+
+    if args.once {
+      return Ok(());
+    }
+
+    let sleep_secs = config.power.charging_interval_secs;
+    log::info!("Kiosk mode -- sleeping {sleep_secs}s before next refresh");
+    std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
   }
 }

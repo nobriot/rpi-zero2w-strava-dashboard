@@ -9,6 +9,7 @@ pub struct RenderRequest<'a> {
   pub display_cfg: &'a display::config::DisplayConfig,
   pub scale:       u32,
   pub save_png:    Option<&'a Path>,
+  pub skip_epaper: bool,
 }
 
 /// Render the dashboard and present it: save PNG if requested, push to the
@@ -25,6 +26,10 @@ pub fn present(req: RenderRequest<'_>) -> Result<()> {
   if let Some(path) = req.save_png {
     preview.save(path).map_err(render_err)?;
     log::info!("Dashboard saved to {}", path.display());
+  }
+
+  if req.skip_epaper {
+    return Ok(());
   }
 
   // Try to push to e-paper. Always render at 2x and downsample -- area

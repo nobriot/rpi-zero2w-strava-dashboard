@@ -39,7 +39,8 @@ fn run_once(config: &mut Config, args: &Args) -> Result<()> {
                                   is_offline:  fetched.is_offline,
                                   display_cfg: &display_cfg,
                                   scale:       args.scale,
-                                  save_png:    args.save_png.as_deref().map(Path::new), })?;
+                                  save_png:    args.save_png.as_deref().map(Path::new),
+                                  skip_epaper: args.kiosk, })?;
 
   fetched.stats.print_summary();
   Ok(())

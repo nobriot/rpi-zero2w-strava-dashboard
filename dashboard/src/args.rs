@@ -31,6 +31,12 @@ pub struct Args {
   #[arg(long, value_name = "PATH")]
   pub save_png: Option<String>,
 
+  /// Kiosk mode: skip e-paper, save PNG to --save-png each cycle, never
+  /// enter low-power or shutdown. Stays awake with WiFi on, refreshing on
+  /// the charging interval.
+  #[arg(long, requires = "save_png")]
+  pub kiosk: bool,
+
   /// Clear all cached data (athlete, stats, activities, avatar)
   #[arg(long)]
   pub clear_cache: bool,
