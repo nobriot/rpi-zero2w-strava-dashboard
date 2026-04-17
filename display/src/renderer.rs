@@ -35,9 +35,9 @@ const RED: Rgb<u8> = Rgb([200, 0, 0]);
 // const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
-const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-Medium.otf");
+const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-SemiBold.otf");
 const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
-const FONT_TITLE_BYTES: &[u8] = include_bytes!("../fonts/Inter-ExtraBold.otf");
+const FONT_TITLE_BYTES: &[u8] = include_bytes!("../fonts/Inter-Black.otf");
 const FONT_SYMBOL_BYTES: &[u8] = include_bytes!("../fonts/MesloLGMNerdFont-Bold-subset.ttf");
 const FONT_EMOJI_BYTES: &[u8] = include_bytes!("../fonts/NotoEmoji-subset.ttf");
 const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png");
