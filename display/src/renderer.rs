@@ -949,19 +949,46 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Polyline placement depends on orientation
-    if config.orientation == Orientation::Portrait {
-      // Portrait: polyline below text
-      let polyline_y = y + s.i(68);
-      draw_polyline(img, stats, polyline_y, s.i(MARGIN), is_offline, config, c, s);
+    // Bottom reserves for battery indicator and optional elements
+    let bat_w = s.u(76);
+    let bat_h = if is_offline { s.u(56) } else { s.u(22) };
+    let canvas_bottom = s.u(c.h) - s.u(MARGIN as u32);
+    let canvas_right = s.u(c.w) - s.u(MARGIN as u32);
+
+    let show_kudos = !config.show_totals && stats.total_kudos > 0;
+
+    let bounds = if config.orientation == Orientation::Portrait {
+      // Portrait: polyline below text, full width
+      let px = s.u(MARGIN as u32);
+      let py = (y + s.i(68)) as u32;
+      let pw = canvas_right - px;
+      // Stop before kudos text or battery indicator
+      let max_bottom = if show_kudos {
+        s.u(c.h) - s.u(MARGIN as u32) - s.u(24)
+      } else {
+        s.u(c.h) - bat_h - s.u(4)
+      };
+      let ph = max_bottom.saturating_sub(py);
+      PolylineBounds { x: px, y: py, w: pw, h: ph }
     } else {
       // Landscape: polyline right of text
       let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
       let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
       let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
-      let polyline_x = text_right + s.i(16);
-      draw_polyline(img, stats, y, polyline_x, is_offline, config, c, s);
-    }
+      let px = (text_right + s.i(16)) as u32;
+      let py = y as u32;
+      // Trim width to avoid battery block in bottom-right corner
+      let bat_x = s.u(c.w) - bat_w;
+      let pw = if py + (canvas_bottom - py) > s.u(c.h) - bat_h {
+        bat_x.saturating_sub(px).saturating_sub(s.u(4))
+      } else {
+        canvas_right.saturating_sub(px)
+      };
+      let ph = canvas_bottom.saturating_sub(py);
+      PolylineBounds { x: px, y: py, w: pw, h: ph }
+    };
+
+    draw_polyline(img, &stats.last_activity_polyline, bounds, config.polyline_thickness, s);
   }
 
   // Total kudos -- bottom-left corner (only when TOTALS section is hidden)
@@ -973,54 +1000,21 @@ fn draw_last_activity(img: &mut RgbImage,
   }
 }
 
-// --- Polyline (orange, right of last-activity text) ---
+// --- Polyline (orange route map) ---
+
+struct PolylineBounds {
+  x: u32,
+  y: u32,
+  w: u32,
+  h: u32,
+}
 
 fn draw_polyline(img: &mut RgbImage,
-                 stats: &DashboardStats,
-                 y_start: i32,
-                 x_start: i32,
-                 is_offline: bool,
-                 config: &DisplayConfig,
-                 c: Canvas,
+                 points: &[(f64, f64)],
+                 bounds: PolylineBounds,
+                 thickness: u32,
                  s: Scale) {
-  let points = &stats.last_activity_polyline;
-  if points.is_empty() {
-    return;
-  }
-
-  // Reserve bottom-right corner for the battery indicator.
-  // Battery block is roughly 70px wide; with OFFLINE label it starts 38px from
-  // bottom, otherwise 22px.
-  let bat_reserve_w = s.u(76);
-  let bat_reserve_h = if is_offline { s.u(38) } else { s.u(22) };
-
-  let area_x = x_start.max(s.i(MARGIN)) as u32;
-  let area_y = y_start as u32;
-  let area_right = s.u(c.w) - s.u(MARGIN as u32);
-  let area_bottom = s.u(c.h) - s.u(MARGIN as u32);
-  let area_w = area_right.saturating_sub(area_x);
-  let area_h = area_bottom.saturating_sub(area_y);
-
-  // Shrink the polyline area so it does not overlap the battery block in the
-  // bottom-right corner.  We only need to shrink if the polyline box actually
-  // reaches the battery region.  To keep the logic simple we trim from the
-  // right when the bottom of the area is in the battery zone, or trim from the
-  // bottom when the right edge is in the battery zone.
-  let bat_x = s.u(c.w) - bat_reserve_w;
-  let bat_y = s.u(c.h) - bat_reserve_h;
-
-  let area_w = if area_y + area_h > bat_y {
-    area_w.min(bat_x.saturating_sub(area_x))
-  } else {
-    area_w
-  };
-  let area_h = if area_x + area_w > bat_x {
-    area_h.min(bat_y.saturating_sub(area_y))
-  } else {
-    area_h
-  };
-
-  if area_h < s.u(20) || area_w < s.u(20) {
+  if points.is_empty() || bounds.w < s.u(20) || bounds.h < s.u(20) {
     return;
   }
 
@@ -1037,30 +1031,30 @@ fn draw_polyline(img: &mut RgbImage,
   let lon_range = (max_lon - min_lon).max(1e-6);
 
   let route_aspect = lon_range / lat_range;
-  let area_aspect = area_w as f64 / area_h as f64;
+  let area_aspect = bounds.w as f64 / bounds.h as f64;
 
   let (draw_w, draw_h, off_x, off_y) = if route_aspect > area_aspect {
-    let dw = area_w as f64;
+    let dw = bounds.w as f64;
     let dh = dw / route_aspect;
-    (dw, dh, 0.0, (area_h as f64 - dh) / 2.0)
+    (dw, dh, 0.0, (bounds.h as f64 - dh) / 2.0)
   } else {
-    let dh = area_h as f64;
+    let dh = bounds.h as f64;
     let dw = dh * route_aspect;
-    (dw, dh, (area_w as f64 - dw) / 2.0, 0.0)
+    (dw, dh, (bounds.w as f64 - dw) / 2.0, 0.0)
   };
 
-  let thickness = s.u(config.polyline_thickness.max(1));
+  let thickness = s.u(thickness.max(1));
   let radius = thickness as f32 / 2.0;
   let r_sq = radius * radius;
   let (img_w, img_h) = (img.width(), img.height());
 
-  // Map all points to pixel coordinates once.
   let px_points: Vec<(f32, f32)> =
     points.iter()
           .map(|&(lat, lon)| {
-            let x = area_x as f32 + off_x as f32 + ((lon - min_lon) / lon_range * draw_w) as f32;
-            let y =
-              area_y as f32 + off_y as f32 + ((1.0 - (lat - min_lat) / lat_range) * draw_h) as f32;
+            let x = bounds.x as f32 + off_x as f32 + ((lon - min_lon) / lon_range * draw_w) as f32;
+            let y = bounds.y as f32
+                    + off_y as f32
+                    + ((1.0 - (lat - min_lat) / lat_range) * draw_h) as f32;
             (x, y)
           })
           .collect();
@@ -1069,7 +1063,6 @@ fn draw_polyline(img: &mut RgbImage,
     let (x0, y0) = window[0];
     let (x1, y1) = window[1];
 
-    // Perpendicular offset for uniform thickness.
     let dx = x1 - x0;
     let dy = y1 - y0;
     let len = (dx * dx + dy * dy).sqrt();
@@ -1083,7 +1076,6 @@ fn draw_polyline(img: &mut RgbImage,
     }
   }
 
-  // Draw filled circles at each vertex to cover gaps at joints.
   if thickness > 1 {
     for &(cx, cy) in &px_points {
       let ix_min = ((cx - radius) as i32).max(0);
