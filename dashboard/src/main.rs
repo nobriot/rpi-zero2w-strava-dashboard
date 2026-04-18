@@ -4,6 +4,7 @@ mod config;
 mod cycle;
 mod errors;
 mod firmware;
+mod heartbeat;
 mod ina219;
 mod logging;
 mod power;

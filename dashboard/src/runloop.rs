@@ -2,6 +2,7 @@ use crate::args::Args;
 use crate::config::Config;
 use crate::cycle;
 use crate::errors::Result;
+use crate::heartbeat::write_heartbeat;
 use crate::power::{self, PowerManager};
 use crate::schedule::{self, SleepPlan};
 
@@ -21,6 +22,7 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
       log::info!("Quiet hours with TPL5110 -- skipping cycle");
     } else {
       cycle::run(&mut config, &args, &mut power_mgr)?;
+      write_heartbeat("Regular start");
     }
 
     if args.once {
@@ -47,6 +49,7 @@ fn run_kiosk(mut config: Config, args: Args) -> Result<()> {
 
   loop {
     cycle::run(&mut config, &args, &mut power_mgr)?;
+    write_heartbeat("Kiosk start");
 
     if args.once {
       return Ok(());

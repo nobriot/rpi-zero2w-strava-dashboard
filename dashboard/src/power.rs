@@ -1,4 +1,5 @@
 use crate::config::PowerConfig;
+use crate::heartbeat::write_heartbeat;
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
@@ -155,6 +156,7 @@ impl PowerManager {
   /// TPL5110 can cut power. Then falls back to `shutdown -h now`.
   /// Returns `true` if shutdown was initiated.
   pub fn shutdown(&mut self) -> bool {
+    write_heartbeat("Shutting down");
     log::info!("Syncing filesystems before shutdown");
     let _ = Command::new("sync").status();
 
