@@ -15,7 +15,8 @@ pub fn fetch(config: &mut Config,
              client: &mut Option<strava::client::Client>,
              show_all_sports: bool)
              -> Result<Fetched> {
-  if let Some(fetched) = try_fresh_cache(&config.display, show_all_sports) {
+  let client_id = config.strava.client_id().to_string();
+  if let Some(fetched) = try_fresh_cache(&client_id, &config.display, show_all_sports) {
     return Ok(fetched);
   }
 
@@ -25,7 +26,7 @@ pub fn fetch(config: &mut Config,
                                         is_offline: false }),
     Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
       log::warn!("Network unavailable ({msg}), falling back to cached data");
-      let (stats, avatar) = fetch_from_stale_cache(&config.display, show_all_sports)?;
+      let (stats, avatar) = fetch_from_stale_cache(&client_id, &config.display, show_all_sports)?;
       Ok(Fetched { stats,
                    avatar,
                    is_offline: true })
@@ -34,18 +35,37 @@ pub fn fetch(config: &mut Config,
   }
 }
 
+/// Look up the athlete ID for a given client_id from the cached mapping.
+fn cached_athlete_id(client_id: &str) -> Option<u64> {
+  let cache = strava::cache::Cache::new();
+  let path = cache.dir().join(format!("athlete_for_{client_id}"));
+  let content = std::fs::read_to_string(path).ok()?;
+  content.trim().parse().ok()
+}
+
+/// Save the client_id -> athlete_id mapping to disk.
+fn save_athlete_id(client_id: &str, athlete_id: u64) {
+  let cache = strava::cache::Cache::new();
+  let path = cache.dir().join(format!("athlete_for_{client_id}"));
+  if let Some(parent) = path.parent() {
+    let _ = std::fs::create_dir_all(parent);
+  }
+  let _ = std::fs::write(path, athlete_id.to_string());
+}
+
 /// Check if all required data is available in fresh cache.
-/// Returns None if any cache entry is stale or missing.
-fn try_fresh_cache(display_cfg: &display::config::DisplayConfig,
+/// Uses the client_id -> athlete_id mapping to find the right cache directory.
+fn try_fresh_cache(client_id: &str,
+                   display_cfg: &display::config::DisplayConfig,
                    show_all_sports: bool)
                    -> Option<Fetched> {
-  let cache = strava::cache::Cache::new();
-  let athlete_cache = cache.most_recent_athlete_cache()?;
+  let athlete_id = cached_athlete_id(client_id)?;
+  let cache = strava::cache::Cache::new().for_athlete(athlete_id);
 
-  let athlete: strava::types::DetailedAthlete = athlete_cache.load("athlete")?;
-  let stats: strava::types::AthleteStats = athlete_cache.load("stats")?;
-  let activities: Vec<strava::types::SummaryActivity> = athlete_cache.load("activities")?;
-  let avatar = std::fs::read(athlete_cache.dir().join("avatar.img")).ok();
+  let athlete: strava::types::DetailedAthlete = cache.load("athlete")?;
+  let stats: strava::types::AthleteStats = cache.load("stats")?;
+  let activities: Vec<strava::types::SummaryActivity> = cache.load("activities")?;
+  let avatar = std::fs::read(cache.dir().join("avatar.img")).ok();
 
   let firstname = athlete.firstname.as_deref().unwrap_or("Athlete");
   log::info!("All cache fresh: athlete={}, activities={}", firstname, activities.len());
@@ -81,6 +101,8 @@ fn fetch_online(config: &mut Config,
   let athlete = c.get_athlete()?;
   log::debug!("Athlete: {} (id: {})", athlete.full_name(), athlete.id);
 
+  save_athlete_id(config.strava.client_id(), athlete.id);
+
   let avatar = load_or_fetch_avatar(c, athlete.profile.as_deref());
 
   log::debug!("Getting athlete stats");
@@ -114,14 +136,20 @@ fn fetch_online(config: &mut Config,
   Ok((dashboard, avatar))
 }
 
-fn fetch_from_stale_cache(display_cfg: &display::config::DisplayConfig,
+/// Offline fallback using the client_id -> athlete_id mapping, or
+/// most_recent_athlete_cache as a last resort.
+fn fetch_from_stale_cache(client_id: &str,
+                          display_cfg: &display::config::DisplayConfig,
                           show_all_sports: bool)
                           -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
-  let athlete_cache =
+  let athlete_cache = if let Some(athlete_id) = cached_athlete_id(client_id) {
+    cache.for_athlete(athlete_id)
+  } else {
     cache.most_recent_athlete_cache()
-         .ok_or_else(|| DashError::Config("No cached athlete data found".to_string()))?;
+         .ok_or_else(|| DashError::Config("No cached athlete data found".to_string()))?
+  };
 
   let athlete: Option<strava::types::DetailedAthlete> = athlete_cache.load_stale("athlete");
   let firstname = athlete.as_ref().and_then(|a| a.firstname.as_deref()).unwrap_or("Athlete");
