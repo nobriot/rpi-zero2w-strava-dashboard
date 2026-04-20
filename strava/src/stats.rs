@@ -105,8 +105,9 @@ fn format_date(raw: &Option<String>) -> String {
 }
 
 fn format_duration_secs(secs: f64) -> String {
-  let days = (secs / 24.0 / 3600.0) as u32;
-  let hours = (secs / 3600.0) as u32;
+  let total_hours = (secs / 3600.0) as u32;
+  let days = total_hours / 24;
+  let hours = total_hours % 24;
   let minutes = ((secs % 3600.0) / 60.0) as u32;
   if days > 0 {
     format!("{days}d {hours}h {minutes:02}m")
@@ -335,5 +336,13 @@ mod tests {
 
     let stats = compute_with(&[commute, private]);
     assert!(stats.last_activity.is_none());
+  }
+
+  #[test]
+  fn test_format_duration_hours_under_24() {
+    assert_eq!(format_duration_secs(3600.0 * 95.0 + 180.0), "3d 23h 03m");
+    assert_eq!(format_duration_secs(3600.0 * 25.0), "1d 1h 00m");
+    assert_eq!(format_duration_secs(3600.0 * 2.5), "2h 30m");
+    assert_eq!(format_duration_secs(3600.0 * 48.0), "2d 0h 00m");
   }
 }
