@@ -57,6 +57,11 @@ pub struct DisplayConfig {
   /// Set to "portrait" for vertical layout (480x800).
   #[serde(default)]
   pub orientation: Orientation,
+
+  /// Use lighter font weights (Regular/SemiBold/Bold instead of
+  /// SemiBold/Bold/Black). Better for screen viewing. Default: false.
+  #[serde(default)]
+  pub light_fonts: bool,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -91,7 +96,8 @@ impl Default for DisplayConfig {
            show_longest_fastest: default_show_longest_fastest(),
            flip:                 default_flip(),
            debug:                false,
-           orientation:          Orientation::default(), }
+           orientation:          Orientation::default(),
+           light_fonts:          false, }
   }
 }
 

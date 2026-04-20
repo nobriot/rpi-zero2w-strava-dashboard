@@ -32,7 +32,12 @@ debug = true
 
 # Display orientation: "landscape" (800x480) or "portrait" (480x800).
 # Portrait stacks all sections vertically. Default: landscape.
-# orientation = "portrait"
+orientation = "landscape"
+
+# Use lighter font weights (Regular/SemiBold/Bold instead of SemiBold/Bold/Black).
+# Better for screen/kiosk viewing where the heavy e-paper weights look too chunky.
+# Default: false.
+light_fonts = false
 
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4

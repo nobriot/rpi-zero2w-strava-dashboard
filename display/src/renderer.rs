@@ -35,9 +35,10 @@ const RED: Rgb<u8> = Rgb([200, 0, 0]);
 // const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
 const BAR_BG: Rgb<u8> = Rgb([230, 230, 230]);
 
-const FONT_BYTES: &[u8] = include_bytes!("../fonts/Inter-SemiBold.otf");
+const FONT_REGULAR_BYTES: &[u8] = include_bytes!("../fonts/Inter-Regular.ttf");
+const FONT_SEMIBOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-SemiBold.otf");
 const FONT_BOLD_BYTES: &[u8] = include_bytes!("../fonts/Inter-Bold.ttf");
-const FONT_TITLE_BYTES: &[u8] = include_bytes!("../fonts/Inter-Black.otf");
+const FONT_BLACK_BYTES: &[u8] = include_bytes!("../fonts/Inter-Black.otf");
 const FONT_SYMBOL_BYTES: &[u8] = include_bytes!("../fonts/MesloLGMNerdFont-Bold-subset.ttf");
 const FONT_EMOJI_BYTES: &[u8] = include_bytes!("../fonts/NotoEmoji-subset.ttf");
 const POWERED_BY_STRAVA: &[u8] = include_bytes!("../assets/powered_by_strava.png");
@@ -193,9 +194,14 @@ pub fn render_dashboard(stats: &DashboardStats,
   let c = Canvas::from_orientation(config.orientation);
   let mut img = RgbImage::from_pixel(s.u(c.w), s.u(c.h), WHITE);
 
-  let font = FontRef::try_from_slice(FONT_BYTES).expect("Failed to load font");
-  let font_bold = FontRef::try_from_slice(FONT_BOLD_BYTES).expect("Failed to load bold font");
-  let font_title = FontRef::try_from_slice(FONT_TITLE_BYTES).expect("Failed to load title font");
+  let (font_bytes, bold_bytes, title_bytes) = if config.light_fonts {
+    (FONT_REGULAR_BYTES, FONT_SEMIBOLD_BYTES, FONT_BOLD_BYTES)
+  } else {
+    (FONT_SEMIBOLD_BYTES, FONT_BOLD_BYTES, FONT_BLACK_BYTES)
+  };
+  let font = FontRef::try_from_slice(font_bytes).expect("Failed to load font");
+  let font_bold = FontRef::try_from_slice(bold_bytes).expect("Failed to load bold font");
+  let font_title = FontRef::try_from_slice(title_bytes).expect("Failed to load title font");
   let font_symbol = FontRef::try_from_slice(FONT_SYMBOL_BYTES).expect("Failed to load symbol font");
   let font_emoji = FontRef::try_from_slice(FONT_EMOJI_BYTES).expect("Failed to load emoji font");
   let layout = Layout::compute(stats,
