@@ -33,7 +33,7 @@ impl Client {
   }
 
   pub fn get_token(&mut self) -> Result<(), StravaError> {
-    log::info!("Getting token");
+    log::debug!("Getting token...");
 
     let response = self.client
                        .post(Self::STRAVA_TOKEN_URL)
@@ -46,10 +46,12 @@ impl Client {
                        .map_err(Self::classify_reqwest_error)?;
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+      log::warn!("Could not get token {response:?}");
       return Err(StravaError::Unauthorized);
     }
 
     if !response.status().is_success() {
+      log::warn!("Getting token was refused: {response:?}");
       return Err(StravaError::StravaApiResponseError(format!("Token refresh failed with status: {}",
                                                              response.status())));
     }

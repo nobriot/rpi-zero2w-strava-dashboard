@@ -13,6 +13,7 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
   }
 
   let mut power_mgr = PowerManager::new(config.power.tpl5110_done_pin);
+  let mut client: Option<strava::client::Client> = None;
 
   loop {
     power_mgr.enable_wifi();
@@ -21,7 +22,7 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
     if schedule::should_skip_cycle(&config.power, battery.as_ref()) {
       log::info!("Quiet hours with TPL5110 -- skipping cycle");
     } else {
-      cycle::run(&mut config, &args, &mut power_mgr)?;
+      cycle::run(&mut config, &mut client, &args, &mut power_mgr)?;
       write_heartbeat("Regular start");
     }
 
@@ -46,9 +47,10 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
 /// Refreshes the PNG on the charging interval, stays awake with WiFi on.
 fn run_kiosk(mut config: Config, args: Args) -> Result<()> {
   let mut power_mgr = PowerManager::new(None);
+  let mut client: Option<strava::client::Client> = None;
 
   loop {
-    cycle::run(&mut config, &args, &mut power_mgr)?;
+    cycle::run(&mut config, &mut client, &args, &mut power_mgr)?;
     write_heartbeat("Kiosk start");
 
     if args.once {

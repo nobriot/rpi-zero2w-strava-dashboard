@@ -8,10 +8,18 @@ use std::path::Path;
 use strava::errors::StravaError;
 
 /// Run one dashboard cycle with error recovery (OAuth re-auth, network retry).
-pub fn run(config: &mut Config, args: &Args, power_mgr: &mut PowerManager) -> Result<()> {
-  match run_once(config, args) {
+pub fn run(config: &mut Config,
+           client: &mut Option<strava::client::Client>,
+           args: &Args,
+           power_mgr: &mut PowerManager)
+           -> Result<()> {
+  match run_once(config, client, args) {
     Ok(()) => Ok(()),
-    Err(DashError::Strava(StravaError::Unauthorized)) => recover_auth(config, args, power_mgr),
+    Err(DashError::Strava(StravaError::Unauthorized)) => {
+      // Discard the old client -- its token is invalid
+      *client = None;
+      recover_auth(config, client, args, power_mgr)
+    },
     Err(DashError::Strava(StravaError::NetworkUnavailable(ref msg))) => {
       log::warn!("Network unavailable: {msg} -- will retry next cycle");
       eprintln!("Network unavailable -- will retry next cycle");
@@ -25,8 +33,11 @@ pub fn run(config: &mut Config, args: &Args, power_mgr: &mut PowerManager) -> Re
   }
 }
 
-fn run_once(config: &mut Config, args: &Args) -> Result<()> {
-  let fetched = stats::fetch(config, args.show_all_sports)?;
+fn run_once(config: &mut Config,
+            client: &mut Option<strava::client::Client>,
+            args: &Args)
+            -> Result<()> {
+  let fetched = stats::fetch(config, client, args.show_all_sports)?;
   let battery = power::read_battery();
 
   let polyline_thickness = args.polyline_thickness.unwrap_or(config.display.polyline_thickness);
@@ -46,7 +57,11 @@ fn run_once(config: &mut Config, args: &Args) -> Result<()> {
   Ok(())
 }
 
-fn recover_auth(config: &mut Config, args: &Args, power_mgr: &mut PowerManager) -> Result<()> {
+fn recover_auth(config: &mut Config,
+                client: &mut Option<strava::client::Client>,
+                args: &Args,
+                power_mgr: &mut PowerManager)
+                -> Result<()> {
   log::warn!("Unauthorized after auto-refresh -- attempting full OAuth re-authorization");
   eprintln!("\nRefresh token invalid. Starting OAuth authorization flow...");
 
@@ -55,7 +70,7 @@ fn recover_auth(config: &mut Config, args: &Args, power_mgr: &mut PowerManager) 
   config.save().map_err(DashError::Config)?;
 
   power_mgr.enable_wifi();
-  if let Err(e) = run_once(config, args) {
+  if let Err(e) = run_once(config, client, args) {
     eprintln!("Error after re-authorization: {e:?}");
   }
   Ok(())
