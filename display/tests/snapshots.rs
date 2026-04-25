@@ -154,7 +154,9 @@ fn snapshot_all_configs() {
   let reference_dir = root.join("tests/snapshots");
   fs::create_dir_all(&snapshot_dir).expect("Failed to create snapshot dir");
 
-  let update_snapshots = std::env::var("UPDATE_SNAPSHOTS").is_ok();
+  let update_snapshots =
+    std::env::var("UPDATE_SNAPSHOTS").ok()
+                                     .is_some_and(|v| !matches!(v.as_str(), "" | "0" | "false"));
   if update_snapshots {
     fs::create_dir_all(&reference_dir).expect("Failed to create reference dir");
   }
