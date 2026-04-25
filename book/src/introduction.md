@@ -2,45 +2,57 @@
 
 This project turns a
 [Waveshare Raspberry Pi Zero 2W PhotoPainter](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
-into Strava dashboard. It pulls your data from Strava using the API and displays a configurable
-dashboard on the 6-colors e-paper screen.
+into a Strava dashboard. It pulls activity data from Strava and renders a
+configurable dashboard onto the 6-colors e-paper screen.
 
 ![Dashboard example](images/dashboard-example.png)
 
-## What it shows
+## Features
 
-- **Yearly goal progress bars** for running, cycling, and swimming
-- **Year-to-date totals** per sport (distance, time, elevation)
-- **Longest and fastest activities** of the year
-- **Race bests** (5K, 10K, half marathon)
-- **Last activity** with a map of the route
-- **Battery level**
-- **Overall totals** (activity count, distance, elevation, kudos)
+- Yearly distance goals per sport (run, ride, swim) with progress bars
+- Year-to-date totals per sport (distance, time, elevation)
+- Longest and fastest activity of the year per sport
+- Race bests (5K, 10K, half marathon) with estimated paces
+- Last activity summary plus the route polyline
+- Sport icons for run, mountain bike, ride, swim, weight training, yoga,
+  pilates, and a generic workout icon for anything else
+- Battery indicator (when an INA219 sensor is wired up)
+- Power management: configurable refresh interval, quiet hours, and
+  optional shutdown between cycles for battery operation
+- Kiosk mode for live previewing on a regular screen (no e-paper required)
 
-## How it works
+## Install
 
-The dashboard runs a simple loop:
+The recommended way to install on the target machine is:
 
-1. Connect to the Strava API
-2. Fetch your latest activities and stats
-3. Render a dashboard image
-4. Send the image to the e-paper display
-5. Sleep for a few hours (configurable)
-6. Repeat
+```bash
+cargo install --git https://github.com/nobriot/rpi-zero2w-strava-dashboard
+```
 
-The e-paper display keeps showing the last image even when powered off, so
-your stats are always visible. Data is cached locally, so if WiFi is
-temporarily unavailable, the dashboard shows the most recent data it has.
+This installs the `strava-dashboard` binary into `~/.cargo/bin/`. Make sure
+that directory is on your `PATH`.
 
-## Overview of the setup process
+For development from a clone:
 
-1. **Buy the hardware** (a PhotoPainter kit using RPi, and optionally a TPL5110)
-2. **Prepare the Raspberry Pi** --- flash the SD card and configure WiFi
-3. **Create a Strava API app** and **authorize it** on your computer --- this
-   produces a config file with your credentials and refresh token
-4. **Customize the configuration** --- set your sport goals, refresh interval, etc.
-5. **Build and deploy** --- compile the software and copy it (along with the
-   config) to the Pi
-6. **Set it up as a service** so it starts automatically on boot
+```bash
+git clone https://github.com/nobriot/rpi-zero2w-strava-dashboard
+cd rpi-zero2w-strava-dashboard
+cargo build --release
+```
 
-Each step is covered in detail in the following chapters.
+## Quick start
+
+1. [Create a Strava API app](./strava-app.md) to obtain a Client ID and
+   Client Secret.
+2. Run the [auth flow](./strava-auth.md) once to produce a config file
+   with a refresh token.
+3. Tweak the generated config file (yearly goals, refresh interval,
+   quiet hours, ...) -- a fully commented example lives at
+   `dist/config.example.toml` in the repo.
+4. Run the dashboard -- see [Usage](./usage.md).
+5. Set it up as a systemd service so it starts on boot --
+   see [Running as a Service](./service.md).
+
+For development setups and cross-compiling to the Pi, see
+[Building](./building.md). When something doesn't work,
+[Troubleshooting](./troubleshooting.md) covers the most common issues.

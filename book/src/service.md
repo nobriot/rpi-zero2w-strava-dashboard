@@ -1,75 +1,41 @@
 # Running as a Service
 
-To make the dashboard start automatically when the Pi boots (and restart if it
-crashes), set it up as a **systemd service**.
+To start the dashboard automatically on boot and restart it on crash, install
+it as a systemd service.
 
-## Install the service
+## Install the unit file
 
-If you used `just deploy`, the service file is already installed. Otherwise,
-copy it manually:
+A ready-to-use unit lives at `dist/strava-dashboard.service` in the repo.
+Adjust the `ExecStart` path and `--config` path if your binary or config
+file are elsewhere, then install it:
 
 ```bash
-# From your computer
-scp dist/strava-dashboard.service pi@photopainter.local:/tmp/
-
-# On the Pi
-ssh pi@photopainter.local
-sudo mv /tmp/strava-dashboard.service /etc/systemd/system/
+sudo cp dist/strava-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
-```
-
-## Enable and start
-
-```bash
-# Enable = start on boot
-sudo systemctl enable strava-dashboard
-
-# Start it now
-sudo systemctl start strava-dashboard
-```
-
-Or do both at once:
-
-```bash
 sudo systemctl enable --now strava-dashboard
 ```
 
-## Check that it's running
+The default unit assumes:
+
+- Binary at `/usr/local/bin/strava-dashboard`
+  (move or symlink your `~/.cargo/bin/strava-dashboard` there, or edit the
+  `ExecStart` path)
+- Config at `/home/pi/.config/rpi-zero2w-strava-dashboard/config.toml`
+- Logs appended to `/var/log/strava-dashboard.log`
+
+## Operate the service
 
 ```bash
-sudo systemctl status strava-dashboard
-```
-
-You should see something like:
-
-```
-● strava-dashboard.service - Strava E-Paper Dashboard
-     Loaded: loaded (/etc/systemd/system/strava-dashboard.service; enabled)
-     Active: active (running) since ...
-```
-
-## Stop or restart
-
-```bash
-# Stop the service
+sudo systemctl status strava-dashboard      # is it running?
+sudo systemctl restart strava-dashboard     # apply config changes
 sudo systemctl stop strava-dashboard
-
-# Restart (e.g., after config changes)
-sudo systemctl restart strava-dashboard
-
-# Disable auto-start on boot
-sudo systemctl disable strava-dashboard
+sudo systemctl disable strava-dashboard     # don't start on next boot
+journalctl -u strava-dashboard -f           # follow logs live
 ```
 
-## What the service does
+## What it does
 
-The service file tells systemd to:
-
-- Wait for network connectivity before starting
-- Run `/usr/local/bin/strava-dashboard`
-- Set log level to `info`
-- Restart automatically if the program crashes (after a 30-second delay)
-- Start on every boot
-
-The dashboard then runs its own internal loop: fetch data, render, display,
-sleep, repeat.
+The unit waits for `network-online.target`, runs `strava-dashboard` with the
+configured paths and `RUST_LOG=info`, and restarts the binary 30 seconds
+after any crash. The dashboard handles its own fetch -> render -> display ->
+sleep loop internally; systemd just keeps the process alive.

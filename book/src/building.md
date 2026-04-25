@@ -1,157 +1,92 @@
-# Building & Deploying
+# Building
 
-At this point you should have:
+For most cases, prefer `cargo install --git ...` (see the
+[Introduction](./introduction.md)). This page covers building from a
+clone -- useful for development, or when cross-compiling to the Raspberry
+Pi from a more powerful machine.
 
-- A Raspberry Pi ready with WiFi ([earlier steps](./sd-card.md))
-- A `my-config.toml` with valid Strava credentials ([authorization](./strava-auth.md))
-- Your display settings customized ([configuration](./configuration.md))
+## Prerequisites
 
-Now it's time to compile the software and deploy everything to the Pi.
-
-## Install prerequisites
-
-### 1. Install Rust
-
-Open a terminal on your computer and run:
+### Rust
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Follow the prompts (the defaults are fine). After installation, restart your
-terminal or run:
-
-```bash
 source ~/.cargo/env
+rustc --version    # 1.93+ required
 ```
 
-Verify it works:
+### Docker (for cross-compilation only)
+
+`cross` runs the toolchain inside a Docker container. Install Docker via
+your package manager or [Docker Desktop](https://www.docker.com/products/docker-desktop/),
+and add yourself to the `docker` group on Linux:
 
 ```bash
-rustc --version
-# Should print something like: rustc 1.93.0 (...)
+sudo usermod -aG docker $USER
+# log out and back in
 ```
 
-> **Note:** You need Rust 1.93 or newer.
+### Just (optional)
 
-### 2. Install Docker
+The repo ships a [`Justfile`](https://just.systems/) with shortcuts for
+common tasks. Install via the
+[upstream instructions](https://just.systems/man/en/packages.html).
 
-`cross` (the cross-compilation tool) uses Docker behind the scenes.
-
-- **Mac:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- **Linux:** Install Docker via your package manager:
-  ```bash
-  # Ubuntu/Debian
-  sudo apt install docker.io
-  sudo usermod -aG docker $USER
-  # Log out and back in for group change to take effect
-  ```
-- **Windows (WSL):** Install
-  [Docker Desktop](https://www.docker.com/products/docker-desktop/) and enable
-  WSL integration in settings.
-
-### 3. Install [Just](https://just.systems/man/en/packages.html)
-
-See their documentation: [https://just.systems/](https://just.systems/) and
-[install page](https://just.systems/).
-
-It could be for example (replacing DEST with the directory where just will be
-installed):
+## Native build
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to DEST
+git clone https://github.com/nobriot/rpi-zero2w-strava-dashboard
+cd rpi-zero2w-strava-dashboard
+cargo build --release
 ```
 
-### Check everything
+The binary lands at `target/release/strava-dashboard`. Run it directly or
+copy it onto your `PATH`.
 
-If you already cloned the repo during the [authorization step](./strava-auth.md),
-run the automated setup that checks and installs all remaining tools:
+## Cross-compile for the Raspberry Pi
 
 ```bash
-just dev
+cargo install cross   # once
+just cross            # or: cross build --release --target aarch64-unknown-linux-gnu
 ```
 
-This verifies your Rust installation, installs missing tools (`cross`, `mdbook`,
-etc.), and does a test build.
+Output: `target/aarch64-unknown-linux-gnu/release/strava-dashboard`.
 
-## Build for the Raspberry Pi
+The first build downloads a Docker image and compiles every dependency
+(5--10 min). Later builds reuse the cache.
 
-Run the cross-compilation build:
+## Deploy to the Pi
+
+The repo's `Justfile` has shortcuts:
 
 ```bash
-just cross
+just deploy pi@photopainter.local                 # binary + service unit
+just deploy-config pi@photopainter.local config.toml
 ```
 
-Or without `just`:
+Or do it manually:
 
 ```bash
-cross build --release --target aarch64-unknown-linux-gnu
-```
+scp target/aarch64-unknown-linux-gnu/release/strava-dashboard pi@photopainter.local:/tmp/
+scp dist/strava-dashboard.service pi@photopainter.local:/tmp/
 
-The first build downloads a Docker image and compiles all dependencies, which
-can take 5--10 minutes. Subsequent builds are much faster.
-
-When it finishes, the compiled program is at:
-
-```
-target/aarch64-unknown-linux-gnu/release/strava-dashboard
-```
-
-## Deploy to the Raspberry Pi
-
-Make sure you can SSH into your Pi (see [Preparing the SD Card](./sd-card.md)).
-
-### Using `just` (recommended)
-
-```bash
-# Deploy the binary and systemd service
-just deploy pi@photopainter.local
-
-# Deploy your config file
-just deploy-config pi@photopainter.local my-config.toml
-```
-
-This compiles, copies the binary and systemd service to the Pi, deploys your
-config file, and restarts the dashboard.
-
-### Manually
-
-```bash
-# Copy the binary
-scp target/aarch64-unknown-linux-gnu/release/strava-dashboard \
-  pi@photopainter.local:/tmp/
-
-# Copy the systemd service file
-scp dist/strava-dashboard.service \
-  pi@photopainter.local:/tmp/
-
-# SSH into the Pi and install
 ssh pi@photopainter.local
 sudo mv /tmp/strava-dashboard /usr/local/bin/
 sudo mv /tmp/strava-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# Deploy the config (from your computer)
-exit
-scp my-config.toml \
-  pi@photopainter.local:~/.config/rpi-zero2w-strava-dashboard/config.toml
+# from your machine:
+ssh pi@photopainter.local 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'
+scp config.toml pi@photopainter.local:~/.config/rpi-zero2w-strava-dashboard/
 ```
 
-> **Note:** You may need to create the config directory on the Pi first:
-> `ssh pi@photopainter.local 'mkdir -p ~/.config/rpi-zero2w-strava-dashboard'`
+Then enable the service -- see [Running as a Service](./service.md).
 
-## Verify it works
-
-SSH into the Pi and run a single cycle:
+## Smoke-test on the Pi
 
 ```bash
 ssh pi@photopainter.local
 strava-dashboard --once
 ```
 
-You should see your stats appear on the e-paper display after about 15 seconds.
-
-## Next step
-
-The dashboard is now installed and working. Continue to
-[Running as a Service](./service.md) to make it start automatically on boot.
+The e-paper display should refresh in about 15 seconds.
