@@ -8,6 +8,9 @@ const ICON_RIDE_SVG: &str = include_str!("../assets/icon_bike.svg");
 const ICON_MTB_SVG: &str = include_str!("../assets/icon_mtb.svg");
 const ICON_SWIM_SVG: &str = include_str!("../assets/icon_swim.svg");
 const ICON_WEIGHT_SVG: &str = include_str!("../assets/icon_weight.svg");
+const ICON_YOGA_SVG: &str = include_str!("../assets/icon_yoga.svg");
+const ICON_PILATES_SVG: &str = include_str!("../assets/icon_pilates.svg");
+const ICON_WORKOUT_SVG: &str = include_str!("../assets/icon_workout.svg");
 
 const ICON_RULER_SVG: &str = include_str!("../assets/icon_ruler.svg");
 const ICON_BAR_CHART_SVG: &str = include_str!("../assets/icon_bar_chart.svg");
@@ -100,6 +103,18 @@ pub fn draw_weight(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u3
   draw_svg_icon(img, x, y, ICON_WEIGHT_SVG, color, scale);
 }
 
+pub fn draw_yoga(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_YOGA_SVG, color, scale);
+}
+
+pub fn draw_pilates(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_PILATES_SVG, color, scale);
+}
+
+pub fn draw_workout(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_WORKOUT_SVG, color, scale);
+}
+
 pub fn draw_ruler(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
   draw_svg_icon(img, x, y, ICON_RULER_SVG, color, scale);
 }
@@ -127,6 +142,9 @@ pub fn draw_sport_icon(img: &mut RgbImage,
     common::SportType::Ride => draw_cyclist(img, x, y, color, scale),
     common::SportType::Swim => draw_swimmer(img, x, y, color, scale),
     common::SportType::WeightTraining => draw_weight(img, x, y, color, scale),
+    common::SportType::Yoga => draw_yoga(img, x, y, color, scale),
+    common::SportType::Pilates => draw_pilates(img, x, y, color, scale),
+    common::SportType::Workout => draw_workout(img, x, y, color, scale),
   }
 }
 

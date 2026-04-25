@@ -95,6 +95,9 @@ fn sport_label(sport: SportType) -> &'static str {
     SportType::Ride => "RIDE",
     SportType::Swim => "SWIM",
     SportType::WeightTraining => "WEIGHTS",
+    SportType::Yoga => "YOGA",
+    SportType::Pilates => "PILATES",
+    SportType::Workout => "WORKOUT",
   }
 }
 
@@ -103,7 +106,9 @@ fn sport_count_noun(sport: SportType) -> &'static str {
     SportType::Run => "runs",
     SportType::Ride => "rides",
     SportType::Swim => "swims",
-    SportType::WeightTraining => "sessions",
+    SportType::WeightTraining | SportType::Yoga | SportType::Pilates | SportType::Workout => {
+      "sessions"
+    },
   }
 }
 
@@ -947,11 +952,12 @@ fn draw_last_activity(img: &mut RgbImage,
                             font_emoji,
                             &line1);
 
-    let line2 = if last.sport == SportType::WeightTraining {
-      format!("{}  ·  {} kudos", last.moving_time_display, last.kudos)
-    } else {
-      format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
-              last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos)
+    let line2 = match last.sport {
+      SportType::WeightTraining | SportType::Yoga | SportType::Pilates | SportType::Workout => {
+        format!("{}  ·  {} kudos", last.moving_time_display, last.kudos)
+      },
+      _ => format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
+                   last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos),
     };
     draw_text_mut(img,
                   SECONDARY_COLOR,

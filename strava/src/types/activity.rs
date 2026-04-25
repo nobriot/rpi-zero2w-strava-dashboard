@@ -144,29 +144,34 @@ impl SummaryActivity {
   ///
   /// Prefers the newer `sport_type` field; falls back to the deprecated `type`
   /// field so that cached data without `sport_type` still classifies correctly.
-  /// Includes virtual activities, excludes electric-assisted.
+  /// Anything not in the explicit list (e-bikes, hike, walk, HIIT, ...) maps to
+  /// `Workout`, so unknown activities still render with the generic icon.
   pub fn sport(&self) -> Option<SportType> {
     // Try sport_type first (fine-grained, current API field)
     if let Some(st) = self.sport_type.as_deref() {
-      return match st {
-        "Run" | "TrailRun" | "VirtualRun" => Some(SportType::Run),
+      return Some(match st {
+        "Run" | "TrailRun" | "VirtualRun" => SportType::Run,
         "Ride" | "MountainBikeRide" | "GravelRide" | "VirtualRide" | "Handcycle" | "Velomobile" => {
-          Some(SportType::Ride)
+          SportType::Ride
         },
-        "Swim" => Some(SportType::Swim),
-        "WeightTraining" => Some(SportType::WeightTraining),
-        // Explicitly exclude electric-assisted and unknown types
-        _ => None,
-      };
+        "Swim" => SportType::Swim,
+        "WeightTraining" => SportType::WeightTraining,
+        "Yoga" => SportType::Yoga,
+        "Pilates" => SportType::Pilates,
+        // Everything else (incl. EBikeRide, HIIT, Crossfit, Hike, Walk, ...) -> Workout.
+        _ => SportType::Workout,
+      });
     }
     // Fallback to deprecated type field (for cached data without sport_type)
-    match self.activity_type.as_deref() {
-      Some("Run") => Some(SportType::Run),
-      Some("Ride") => Some(SportType::Ride),
-      Some("Swim") => Some(SportType::Swim),
-      Some("WeightTraining") => Some(SportType::WeightTraining),
-      _ => None,
-    }
+    self.activity_type.as_deref().map(|t| match t {
+                                   "Run" => SportType::Run,
+                                   "Ride" => SportType::Ride,
+                                   "Swim" => SportType::Swim,
+                                   "WeightTraining" => SportType::WeightTraining,
+                                   "Yoga" => SportType::Yoga,
+                                   "Pilates" => SportType::Pilates,
+                                   _ => SportType::Workout,
+                                 })
   }
 
   /// Format pace as "M:SS /100m" (for swimming)
@@ -329,20 +334,29 @@ mod tests {
   }
 
   #[test]
-  fn test_sport_type_ebike_excluded() {
+  fn test_sport_type_ebike_classified_as_workout() {
     for sport_type in ["EBikeRide", "EMountainBikeRide"] {
       let json = format!(r#"{{"id":1,"sport_type":"{}","distance":30000.0}}"#, sport_type);
       let a: SummaryActivity = serde_json::from_str(&json).unwrap();
-      assert_eq!(a.sport(), None, "{sport_type} should be excluded");
+      assert_eq!(a.sport(), Some(SportType::Workout), "{sport_type} should fall back to Workout");
       assert!(!a.is_ride(), "{sport_type} should NOT be is_ride()");
     }
   }
 
   #[test]
-  fn test_sport_type_unknown_excluded() {
-    let json = r#"{"id":1,"sport_type":"Yoga","distance":0.0}"#;
+  fn test_sport_type_unknown_falls_back_to_workout() {
+    let json = r#"{"id":1,"sport_type":"Crossfit","distance":0.0}"#;
     let a: SummaryActivity = serde_json::from_str(&json).unwrap();
-    assert_eq!(a.sport(), None);
+    assert_eq!(a.sport(), Some(SportType::Workout));
+  }
+
+  #[test]
+  fn test_sport_type_yoga_and_pilates() {
+    for (st, expected) in [("Yoga", SportType::Yoga), ("Pilates", SportType::Pilates)] {
+      let json = format!(r#"{{"id":1,"sport_type":"{}","distance":0.0}}"#, st);
+      let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+      assert_eq!(a.sport(), Some(expected), "{st} mapping");
+    }
   }
 
   #[test]

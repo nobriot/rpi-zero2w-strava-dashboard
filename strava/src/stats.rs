@@ -74,7 +74,7 @@ pub fn compute(stats: &AthleteStats,
                                                                                   .as_deref())
                                                                         });
   let last_activity = last_eligible.map(|a| {
-                                     let sport = a.sport().unwrap_or(SportType::Ride);
+                                     let sport = a.sport().unwrap_or(SportType::Workout);
                                      to_highlight(a, sport)
                                    });
 
@@ -121,7 +121,9 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
     SportType::Run => a.format_pace_per_km(),
     SportType::Ride => format!("{:.1} km/h", a.avg_speed_kmh()),
     SportType::Swim => a.format_pace_per_100m(),
-    SportType::WeightTraining => String::new(),
+    SportType::WeightTraining | SportType::Yoga | SportType::Pilates | SportType::Workout => {
+      String::new()
+    },
   };
   ActivityHighlight { sport,
                       name: a.name.clone().unwrap_or_else(|| "Unnamed".to_string()),
