@@ -7,6 +7,7 @@ const ICON_RUN_SVG: &str = include_str!("../assets/icon_run.svg");
 const ICON_RIDE_SVG: &str = include_str!("../assets/icon_bike.svg");
 const ICON_MTB_SVG: &str = include_str!("../assets/icon_mtb.svg");
 const ICON_SWIM_SVG: &str = include_str!("../assets/icon_swim.svg");
+const ICON_WEIGHT_SVG: &str = include_str!("../assets/icon_weight.svg");
 
 const ICON_RULER_SVG: &str = include_str!("../assets/icon_ruler.svg");
 const ICON_BAR_CHART_SVG: &str = include_str!("../assets/icon_bar_chart.svg");
@@ -95,6 +96,10 @@ pub fn draw_swimmer(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u
   draw_svg_icon(img, x, y, ICON_SWIM_SVG, color, scale);
 }
 
+pub fn draw_weight(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
+  draw_svg_icon(img, x, y, ICON_WEIGHT_SVG, color, scale);
+}
+
 pub fn draw_ruler(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>, scale: u32) {
   draw_svg_icon(img, x, y, ICON_RULER_SVG, color, scale);
 }
@@ -121,6 +126,7 @@ pub fn draw_sport_icon(img: &mut RgbImage,
     common::SportType::Ride if is_mtb => draw_mtb(img, x, y, color, scale),
     common::SportType::Ride => draw_cyclist(img, x, y, color, scale),
     common::SportType::Swim => draw_swimmer(img, x, y, color, scale),
+    common::SportType::WeightTraining => draw_weight(img, x, y, color, scale),
   }
 }
 

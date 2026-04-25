@@ -154,6 +154,7 @@ impl SummaryActivity {
           Some(SportType::Ride)
         },
         "Swim" => Some(SportType::Swim),
+        "WeightTraining" => Some(SportType::WeightTraining),
         // Explicitly exclude electric-assisted and unknown types
         _ => None,
       };
@@ -163,6 +164,7 @@ impl SummaryActivity {
       Some("Run") => Some(SportType::Run),
       Some("Ride") => Some(SportType::Ride),
       Some("Swim") => Some(SportType::Swim),
+      Some("WeightTraining") => Some(SportType::WeightTraining),
       _ => None,
     }
   }
@@ -317,6 +319,13 @@ mod tests {
     let a: SummaryActivity = serde_json::from_str(&json).unwrap();
     assert_eq!(a.sport(), Some(SportType::Swim));
     assert!(a.is_swim());
+  }
+
+  #[test]
+  fn test_sport_type_weight_training() {
+    let json = r#"{"id":1,"sport_type":"WeightTraining","distance":0.0}"#;
+    let a: SummaryActivity = serde_json::from_str(&json).unwrap();
+    assert_eq!(a.sport(), Some(SportType::WeightTraining));
   }
 
   #[test]

@@ -121,6 +121,7 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
     SportType::Run => a.format_pace_per_km(),
     SportType::Ride => format!("{:.1} km/h", a.avg_speed_kmh()),
     SportType::Swim => a.format_pace_per_100m(),
+    SportType::WeightTraining => String::new(),
   };
   ActivityHighlight { sport,
                       name: a.name.clone().unwrap_or_else(|| "Unnamed".to_string()),
@@ -336,6 +337,22 @@ mod tests {
 
     let stats = compute_with(&[commute, private]);
     assert!(stats.last_activity.is_none());
+  }
+
+  #[test]
+  fn test_last_activity_weight_training_sport() {
+    let weight = SummaryActivity { activity_type: Some("WeightTraining".to_string()),
+                                   sport_type: Some("WeightTraining".to_string()),
+                                   distance: 0.0,
+                                   ..make_run(0.0, 2700, "Morning Weight Training", "2026-03-25") };
+    let earlier_run = make_run(10_000.0, 3000, "Long run", "2026-03-20");
+
+    let stats = compute_with(&[earlier_run, weight]);
+    let last = stats.last_activity.as_ref().unwrap();
+    assert_eq!(last.name, "Morning Weight Training");
+    assert_eq!(last.sport, SportType::WeightTraining);
+    assert!(last.pace_or_speed.is_empty());
+    assert!(!last.is_mtb);
   }
 
   #[test]

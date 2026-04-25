@@ -188,6 +188,8 @@ impl AthleteStats {
       (SportType::Swim, Period::Recent) => self.recent_swim_totals.as_ref(),
       (SportType::Swim, Period::YearToDate) => self.ytd_swim_totals.as_ref(),
       (SportType::Swim, Period::AllTime) => self.all_swim_totals.as_ref(),
+      // Strava aggregate athlete stats only expose run/ride/swim totals.
+      (SportType::WeightTraining, _) => None,
     }
   }
 
@@ -222,6 +224,7 @@ impl AthleteStats {
       SportType::Run => "🏃 RUNNING",
       SportType::Ride => "🚴 CYCLING",
       SportType::Swim => "🏊 SWIMMING",
+      SportType::WeightTraining => "🏋 WEIGHT TRAINING",
     };
 
     println!("{}", sport_name);

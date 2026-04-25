@@ -7,6 +7,7 @@ pub enum SportType {
   Run,
   Ride,
   Swim,
+  WeightTraining,
 }
 
 /// How the "longest" activity is determined for a sport.
@@ -160,6 +161,7 @@ impl DashboardStats {
         SportType::Run => "🏃",
         SportType::Ride => "🚴",
         SportType::Swim => "🏊",
+        SportType::WeightTraining => "🏋",
       };
       println!("{} YTD {:?}: {:.1} km · {} activities · {}",
                icon, s.sport, s.ytd_distance_km, s.ytd_count, s.ytd_time_display);

@@ -94,6 +94,7 @@ fn sport_label(sport: SportType) -> &'static str {
     SportType::Run => "RUN",
     SportType::Ride => "RIDE",
     SportType::Swim => "SWIM",
+    SportType::WeightTraining => "WEIGHTS",
   }
 }
 
@@ -102,6 +103,7 @@ fn sport_count_noun(sport: SportType) -> &'static str {
     SportType::Run => "runs",
     SportType::Ride => "rides",
     SportType::Swim => "swims",
+    SportType::WeightTraining => "sessions",
   }
 }
 
@@ -945,8 +947,12 @@ fn draw_last_activity(img: &mut RgbImage,
                             font_emoji,
                             &line1);
 
-    let line2 = format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
-                        last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos);
+    let line2 = if last.sport == SportType::WeightTraining {
+      format!("{}  ·  {} kudos", last.moving_time_display, last.kudos)
+    } else {
+      format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
+              last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos)
+    };
     draw_text_mut(img,
                   SECONDARY_COLOR,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
