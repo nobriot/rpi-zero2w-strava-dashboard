@@ -5,4 +5,5 @@
 /book/book
 *.png
 !display/assets/*.png
-!book/src/images/*.png
+!book/src/images/**/*.png
+!book/src/assets/*.png

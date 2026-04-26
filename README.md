@@ -68,7 +68,7 @@ Cargo workspace with 3 crates:
 |-------|------|---------|---------|
 | **`strava`** | library | — | Strava API client, OAuth, caching, stats |
 | **`display`** | library | — | E-paper renderer, hardware drivers (SPI, I2C) |
-| **`dashboard`** | binary | RPi | Main loop: fetch → render → display |
+| **`dashboard`** | binary | RPi/dev machine | Main loop: fetch → render → display |
 
 ---
 

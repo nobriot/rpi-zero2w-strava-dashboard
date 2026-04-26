@@ -1,6 +1,7 @@
 # Summary
 
 [Introduction](./introduction.md)
+- [Gallery](./gallery.md)
 - [Creating a Strava API App](./strava-app.md)
 - [Strava Authorization](./strava-auth.md)
 - [Usage](./usage.md)
