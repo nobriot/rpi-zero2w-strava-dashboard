@@ -72,17 +72,8 @@ Cargo workspace with 3 crates:
 
 ---
 
-## Configuration
-
-See the `dist/config.example.toml` for available keys.
-Config file (default): `~/.config/rpi-zero2w-strava-dashboard/config.toml`
-
----
-
 ## Credits
 
 Totally inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter).
 See also: [Statistics-for-Strava](https://github.com/robiningelbrecht/statistics-for-strava).
 
-- [Waveshare RPi Zero PhotoPainter Wiki](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
-- [Waveshare 7.3" ACeP e-Paper Spec](https://www.waveshare.com/7.3inch-e-paper-hat-f.htm)

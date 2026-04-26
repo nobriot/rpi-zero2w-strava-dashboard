@@ -7,3 +7,4 @@
 - [Building](./building.md)
 - [Running as a Service](./service.md)
 - [Troubleshooting](./troubleshooting.md)
+[References](./references.md)
