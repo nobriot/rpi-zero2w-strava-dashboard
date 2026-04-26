@@ -7,7 +7,9 @@ with e-paper display.
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-Somebody said vide-coding is for toys, not production... So let's build a toy! 🙂
+Somebody said vide-coding is for toys, not production...
+
+So let's build a toy! 🙂
 
 This is the first project where I experimented with copilot / claude a little
 bit to get a feel for what they can do.
@@ -17,54 +19,7 @@ though I probably micro-manage them too much.
 
 ---
 
-## Quick demo
-
-TODO:Insert a picture
-
-## TODOs
-
-
-## What It Does
-
-Displays your Strava stats on a 7.3" 6-color e-paper display:
-
-- **Multi-sport tracking** — Run, Ride, Swim with yearly goal progress bars
-- **Activity details** — Longest, fastest, race bests (5K/10K/HM)
-- **Last activity with route polyline**
-- **Auto-refresh** at configurable intervals with quiet hours
-- **Low power** — battery monitoring via INA219
-- **USB setup** — plug into your computer to configure WiFi and Strava auth
-
----
-
-## Hardware Requirements
-
-- **Raspberry Pi Zero 2W** (or any RPi with SPI + USB OTG)
-- **Waveshare 7.3" ACeP 6-Color E-Paper Display** (800×480)
-- **MicroSD card** (16GB+ recommended)
-- **Power supply** (5V 2.5A) or UPS battery with INA219
-
----
-
 ## Quick Start
-
-### 1. Prepare the RPi SD Card
-
-Those displays come with **Raspberry Pi OS** pre-flashed, and some repos
-cloned on the home directory. The RPI has the default password and SSH enabled.
-
-Those bandits use NetworkManager
-
-TODO: Explain here how to add a nmconnection file to add your WiFi
-
-### 2. Setup your Strava API Tokens
-
-
-TODO: Write me
-Run the dashboard on the dev machine with --auth. It will generate a config
-file that you have to copy over on the rpi.
-
-### 2. Build & Deploy
 
 On your dev machine:
 
@@ -85,7 +40,7 @@ scp dist/strava-dashboard.service pi@<host>:/etc/systemd/system/
 ssh pi@<host> 'sudo systemctl daemon-reload && sudo systemctl enable --now strava-dashboard'
 ```
 
-or use just: 
+Install [just](https://just.systems/man/en/), and get started with:
 
 ```bash
 just dev
@@ -93,12 +48,11 @@ just dev
 
 Then run the strava auth - to allow your application to pull your data:
 
-
 ```bash
 just strava-auth
 ```
 
-Finally, deploy to the RPi:
+Finally, deploy to the RPi if you want to run it on one:
 
 ```bash
 just deploy pi@<host> <config.toml>
@@ -125,34 +79,10 @@ Config file (default): `~/.config/rpi-zero2w-strava-dashboard/config.toml`
 
 ---
 
-## CLI Arguments (dashboard)
-
-```
---auth              Run Strava OAuth flow manually
---once              Run single cycle and exit
---save-png <path>   Save rendered dashboard as PNG
---clear-cache       Clear all cached data and exit
---show-all-sports   Show all sports even without activities (demo mode)
-```
-
----
-
-## Building & Testing
-
-```bash
-cargo build                          # Build dashboard (default member)
-cargo build --workspace              # Build all crates
-cargo test --workspace               # Run all tests
-cargo test -p strava                 # Tests in the strava crate
-RUST_LOG=debug cargo run -- --once   # Run once with debug logging
-```
-
-Requires Rust edition 2024 (rust-version 1.93+).
-
----
-
 ## Credits
 
 Totally inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter).
-
 See also: [Statistics-for-Strava](https://github.com/robiningelbrecht/statistics-for-strava).
+
+- [Waveshare RPi Zero PhotoPainter Wiki](https://www.waveshare.com/wiki/RPi_Zero_PhotoPainter)
+- [Waveshare 7.3" ACeP e-Paper Spec](https://www.waveshare.com/7.3inch-e-paper-hat-f.htm)

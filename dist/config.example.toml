@@ -96,8 +96,11 @@ ssh_inhibit_below_percent = 60
 # if you need to recover the previous config
 sync_firmware = true
 
-# GPIO pin for TPL5110 DONE signal. When set, the Pi will signal the
-# TPL5110 to cut power after each battery cycle (true zero standby current).
+# GPIO pin for TPL5110 DONE signal.
+# You need to install a TPL5110 to switch off the RPi after it cycles
+# if you are running on battery. Do not use this option otherwise.
+# When set, the Pi will signal the TPL5110 to cut power after each battery
+# cycle.
 # The wake interval is controlled by the resistor on the TPL5110 board.
 # Requires the TPL5110 DONE pin wired to this GPIO. Default: not set
 # tpl5110_done_pin = 23
