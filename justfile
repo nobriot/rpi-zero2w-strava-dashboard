@@ -125,11 +125,20 @@ snapshot-update:
 
 # Render a single preview PNG from live/cached data (default config)
 preview:
-    cargo run -- --once --save-png tmp/test.png --scale 1
+    cargo run -- --once --save-png tmp/test.png --scale 2
 
 # Render a preview for a specific test config
 preview-config config:
-    cargo run -- --once --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 1
+    cargo run -- --once --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 2
+
+# Update gallery images in the book by re-rendering nicolas, sabrina and sabrina-portrait
+gallery:
+    just preview-config nicolas
+    just preview-config sabrina
+    just preview-config sabrina-portrait
+    cp tmp/nicolas.png book/src/images/gallery/nicolas.png
+    cp tmp/sabrina.png book/src/images/gallery/sabrina.png
+    cp tmp/sabrina-portrait.png book/src/images/gallery/sabrina-portrait.png
 
 # Lint: clippy + format
 lint:

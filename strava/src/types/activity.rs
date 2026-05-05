@@ -116,9 +116,9 @@ impl SummaryActivity {
     let seconds = self.moving_time % 60;
 
     if hours > 0 {
-      format!("{hours}h {minutes}m {seconds}s")
+      format!("{hours}h {minutes}m {seconds:02}s")
     } else if minutes > 0 {
-      format!("{minutes}m {seconds}s")
+      format!("{minutes}m {seconds:02}s")
     } else {
       format!("{seconds}s")
     }

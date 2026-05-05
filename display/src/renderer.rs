@@ -755,25 +755,33 @@ fn draw_fastest_entries(img: &mut RgbImage,
   let name_sz = PxScale::from(layout.lf_name_font);
   let text_x = x + s.u(ICON_SZ) as i32 + s.i(12);
 
+  // Render labels in a fixed-width column so values align across rows.
+  let label_col_w = stats.run_race_bests
+                         .iter()
+                         .map(|rb| measure_text_width(font_bold, detail_sz, rb.label) as i32)
+                         .max()
+                         .unwrap_or(0);
+  let value_x = text_x + label_col_w + s.i(8);
+
   for rb in &stats.run_race_bests {
     icons::draw_runner(img, (x + s.i(4)) as u32, y as u32, BLACK, s.factor());
+    draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, rb.label);
     if let (Some(pace), Some(dist), Some(time)) =
       (&rb.pace, rb.distance_km, &rb.moving_time_display)
     {
-      let line1 = format!("{}  -  {}  ·  {}", rb.label, pace, time);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      let value = format!("-  {}  ·  {}", pace, time);
+      draw_text_mut(img, BLACK, value_x, y + s.i(2), detail_sz, font_bold, &value);
       if dist > rb.target_km * 1.1 {
-        let bold_w = measure_text_width(font_bold, detail_sz, &line1) as i32;
+        let value_w = measure_text_width(font_bold, detail_sz, &value) as i32;
         let suffix = format!("  ·  ({:.1}km)", dist);
-        draw_text_mut(img, BLACK, text_x + bold_w, y + s.i(2), detail_sz, font, &suffix);
+        draw_text_mut(img, BLACK, value_x + value_w, y + s.i(2), detail_sz, font, &suffix);
       }
       let name = rb.name.as_deref().unwrap_or("—");
       let date = rb.date.as_deref().unwrap_or("—");
       let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
       draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else {
-      let line1 = format!("{}  —", rb.label);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      draw_text_mut(img, BLACK, value_x, y + s.i(2), detail_sz, font_bold, "—");
     }
     y += layout.lf_entry_h;
   }
@@ -937,7 +945,7 @@ fn draw_last_activity(img: &mut RgbImage,
     let line1_x = s.i(MARGIN);
     icons::draw_sport_icon(img,
                            line1_x as u32,
-                           (y + s.i(22)) as u32,
+                           (y + s.i(30)) as u32,
                            last.sport,
                            last.is_mtb,
                            BLACK,
@@ -946,7 +954,7 @@ fn draw_last_activity(img: &mut RgbImage,
     draw_text_with_fallback(img,
                             MAIN_COLOR,
                             line1_x + s.u(ICON_SZ) as i32 + s.i(6),
-                            y + s.i(24),
+                            y + s.i(32),
                             s.px(MAIN_FONT_SZ),
                             font_bold,
                             font_emoji,
@@ -962,7 +970,7 @@ fn draw_last_activity(img: &mut RgbImage,
     draw_text_mut(img,
                   SECONDARY_COLOR,
                   line1_x + s.u(ICON_SZ) as i32 + s.i(6),
-                  y + s.i(48),
+                  y + s.i(56),
                   s.px(SECONDARY_FONT_SZ),
                   font,
                   &line2);
