@@ -135,6 +135,7 @@ fn render_for_entry(entry: &TestEntry) -> (String, RgbImage) {
                              &config.display,
                              avatar_bytes.as_deref(),
                              false, // not offline
+                             None,  // no IP address in tests
                              scale);
 
   let name = entry.config.trim_end_matches(".toml").to_string();

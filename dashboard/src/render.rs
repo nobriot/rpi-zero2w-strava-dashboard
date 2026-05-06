@@ -6,6 +6,7 @@ pub struct RenderRequest<'a> {
   pub battery:     Option<&'a common::BatteryStatus>,
   pub avatar:      Option<&'a [u8]>,
   pub is_offline:  bool,
+  pub ip_address:  Option<&'a str>,
   pub display_cfg: &'a display::config::DisplayConfig,
   pub scale:       u32,
   pub save_png:    Option<&'a Path>,
@@ -21,6 +22,7 @@ pub fn present(req: RenderRequest<'_>) -> Result<()> {
                                                     req.display_cfg,
                                                     req.avatar,
                                                     req.is_offline,
+                                                    req.ip_address,
                                                     preview_scale);
 
   if let Some(path) = req.save_png {
@@ -43,6 +45,7 @@ pub fn present(req: RenderRequest<'_>) -> Result<()> {
                                                         req.display_cfg,
                                                         req.avatar,
                                                         req.is_offline,
+                                                        req.ip_address,
                                                         ss_scale);
       let epd_img = if req.display_cfg.flip {
         image::imageops::rotate180(&epd_img)

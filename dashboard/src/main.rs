@@ -7,6 +7,7 @@ mod firmware;
 mod heartbeat;
 mod ina219;
 mod logging;
+mod net;
 mod power;
 mod render;
 mod runloop;

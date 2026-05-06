@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::errors::{DashError, Result};
 use crate::power::{self, PowerManager};
 use crate::render::{self, RenderRequest};
-use crate::stats;
+use crate::{net, stats};
 use std::path::Path;
 use strava::errors::StravaError;
 
@@ -44,10 +44,17 @@ fn run_once(config: &mut Config,
   let display_cfg = display::config::DisplayConfig { polyline_thickness,
                                                      ..config.display.clone() };
 
+  let ip = if display_cfg.display_ip_address && !fetched.is_offline {
+    net::local_ipv4()
+  } else {
+    None
+  };
+
   render::present(RenderRequest { stats:       &fetched.stats,
                                   battery:     battery.as_ref(),
                                   avatar:      fetched.avatar.as_deref(),
                                   is_offline:  fetched.is_offline,
+                                  ip_address:  ip.as_deref(),
                                   display_cfg: &display_cfg,
                                   scale:       args.scale,
                                   save_png:    args.save_png.as_deref().map(Path::new),

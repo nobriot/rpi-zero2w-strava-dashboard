@@ -39,6 +39,10 @@ orientation = "landscape"
 # Default: false.
 light_fonts = false
 
+# Show the local IPv4 address in place of the OFFLINE marker when the device is
+# connected to a network. Useful for headless setup / SSH access. Default: false.
+display_ip_address = true
+
 # Polyline thickness in pixels for the last activity route. Default: 3.
 polyline_thickness = 4
 

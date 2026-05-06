@@ -196,6 +196,7 @@ pub fn render_dashboard(stats: &DashboardStats,
                         config: &DisplayConfig,
                         avatar: Option<&[u8]>,
                         is_offline: bool,
+                        ip_address: Option<&str>,
                         s: Scale)
                         -> RgbImage {
   let c = Canvas::from_orientation(config.orientation);
@@ -241,9 +242,26 @@ pub fn render_dashboard(stats: &DashboardStats,
   } else {
     y
   };
-  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, is_offline, config, c, s);
+  let show_ip = !is_offline && config.display_ip_address && ip_address.is_some();
+  let label_text = if is_offline {
+    Some("OFFLINE")
+  } else if show_ip {
+    ip_address
+  } else {
+    None
+  };
+  let group = bottom_right_group_size(&font, &font_bold, battery, label_text, config.debug, s);
+  draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, group, config, c, s);
 
-  draw_battery_indicator(&mut img, &font, &font_bold, battery, is_offline, config.debug, c, s);
+  draw_battery_indicator(&mut img,
+                         &font,
+                         &font_bold,
+                         battery,
+                         label_text,
+                         config.debug,
+                         group.width,
+                         c,
+                         s);
 
   // Portrait is rendered at 480x800 but the physical display is 800x480.
   // Rotate 90 degrees CW so the image maps correctly to the hardware.
@@ -254,14 +272,51 @@ pub fn render_dashboard(stats: &DashboardStats,
   }
 }
 
-/// Draw battery percentage, optional "OFFLINE" label, and optional debug
-/// sync timestamp at the bottom-right corner.
+/// Reserved size of the bottom-right corner group (battery, optional sync
+/// timestamp, optional OFFLINE / IP label). Used both for drawing the
+/// indicator and for letting `draw_last_activity` keep the polyline clear.
+#[derive(Copy, Clone)]
+struct GroupSize {
+  width:  u32,
+  height: u32,
+}
+
+fn bottom_right_group_size(font: &FontRef,
+                           font_bold: &FontRef,
+                           battery: Option<&BatteryStatus>,
+                           label_text: Option<&str>,
+                           debug: bool,
+                           s: Scale)
+                           -> GroupSize {
+  let bat_pct = battery.map(|b| b.percentage()).unwrap_or(100);
+  let bat_text = format!("{}%", bat_pct);
+  let text_w = measure_text_width(font_bold, s.px(16.0), &bat_text) as i32;
+  let bat_row_w = text_w + s.i(4) + s.i(24);
+
+  let label_w =
+    label_text.map(|t| measure_text_width(font_bold, s.px(14.0), t) as i32).unwrap_or(0);
+  let sync_w = if debug {
+    let sync_text = chrono::Local::now().format("%d/%m %H:%M").to_string();
+    measure_text_width(font, s.px(12.0), &sync_text) as i32
+  } else {
+    0
+  };
+
+  let width = bat_row_w.max(label_w).max(sync_w) as u32;
+  let height = if label_text.is_some() { s.u(56) } else { s.u(22) };
+  GroupSize { width, height }
+}
+
+/// Draw battery percentage, optional "OFFLINE" / IP label, and optional debug
+/// sync timestamp stacked vertically in the bottom-right corner. All three
+/// rows share a common left edge (left-aligned).
 fn draw_battery_indicator(img: &mut RgbImage,
                           font: &FontRef,
                           font_bold: &FontRef,
                           battery: Option<&BatteryStatus>,
-                          is_offline: bool,
+                          label_text: Option<&str>,
                           debug: bool,
+                          group_w: u32,
                           c: Canvas,
                           s: Scale) {
   let bat_pct = battery.map(|b| b.percentage()).unwrap_or(100);
@@ -269,28 +324,19 @@ fn draw_battery_indicator(img: &mut RgbImage,
   let bat_text = format!("{}%", bat_pct);
   let text_scale = s.px(16.0);
   let text_w = measure_text_width(font_bold, text_scale, &bat_text) as i32;
-
-  // Stack vertically at bottom-right, left-aligned
-  let icon_w = s.i(24);
   let gap = s.i(4);
-  let total_w = text_w + gap + icon_w;
-  let x = s.u(c.w) as i32 - total_w;
 
-  if debug {
-    let now = chrono::Local::now();
-    let sync_text = now.format("%d/%m %H:%M").to_string();
-    let sync_scale = s.px(12.0);
-    let sync_w = measure_text_width(font, sync_scale, &sync_text) as i32;
-    let sync_x = s.u(c.w) as i32 - sync_w - 4;
-    let sync_y = s.u(c.h) as i32 - s.i(40);
-    draw_text_mut(img, BLACK, sync_x, sync_y, sync_scale, font, &sync_text);
+  let x = s.u(c.w) as i32 - group_w as i32;
+
+  if let Some(t) = label_text {
+    let y_label = s.u(c.h) as i32 - s.i(56);
+    draw_text_mut(img, BLACK, x, y_label, s.px(14.0), font_bold, t);
   }
 
-  if is_offline {
-    let label = "OFFLINE";
-    let label_scale = s.px(14.0);
-    let y_offline = s.u(c.h) as i32 - s.i(56);
-    draw_text_mut(img, BLACK, x, y_offline, label_scale, font_bold, label);
+  if debug {
+    let sync_text = chrono::Local::now().format("%d/%m %H:%M").to_string();
+    let sync_y = s.u(c.h) as i32 - s.i(40);
+    draw_text_mut(img, BLACK, x, sync_y, s.px(12.0), font, &sync_text);
   }
 
   let y = s.u(c.h) as i32 - s.i(MARGIN);
@@ -918,7 +964,7 @@ fn draw_last_activity(img: &mut RgbImage,
                       font_emoji: &FontRef,
                       stats: &DashboardStats,
                       y_start: i32,
-                      is_offline: bool,
+                      group: GroupSize,
                       config: &DisplayConfig,
                       c: Canvas,
                       s: Scale) {
@@ -975,9 +1021,11 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Bottom reserves for battery indicator and optional elements
-    let bat_w = s.u(76);
-    let bat_h = if is_offline { s.u(56) } else { s.u(22) };
+    // Bottom reserves for battery indicator and optional elements.
+    // Add a small horizontal margin so the polyline never butts up against
+    // the right-aligned text/icon column.
+    let bat_w = group.width + s.u(8);
+    let bat_h = group.height;
     let canvas_bottom = s.u(c.h) - s.u(MARGIN as u32);
     let canvas_right = s.u(c.w) - s.u(MARGIN as u32);
 

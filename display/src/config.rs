@@ -62,6 +62,12 @@ pub struct DisplayConfig {
   /// SemiBold/Bold/Black). Better for screen viewing. Default: false.
   #[serde(default)]
   pub light_fonts: bool,
+
+  /// Display the local IPv4 address in place of the OFFLINE marker when
+  /// the device is connected to a network. Useful for headless setup /
+  /// SSH access. Default: false.
+  #[serde(default)]
+  pub display_ip_address: bool,
 }
 
 fn default_polyline_thickness() -> u32 {
@@ -97,7 +103,8 @@ impl Default for DisplayConfig {
            flip:                 default_flip(),
            debug:                false,
            orientation:          Orientation::default(),
-           light_fonts:          false, }
+           light_fonts:          false,
+           display_ip_address:   false, }
   }
 }
 
