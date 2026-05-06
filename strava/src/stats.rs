@@ -49,18 +49,15 @@ pub fn compute(stats: &AthleteStats,
                                        })
                                        .map(|a| to_highlight(a, sport));
 
-                     let (distance_km, moving_time, time_display) = match ytd {
-                       Some(t) => {
-                         (t.distance_km(), t.moving_time, format_duration_secs(t.moving_time))
-                       },
-                       None => (0.0, 0.0, "0h 0m".to_string()),
+                     let (distance_km, moving_time) = match ytd {
+                       Some(t) => (t.distance_km(), t.moving_time as u32),
+                       None => (0.0, 0),
                      };
 
                      Some(SportSummary { sport,
                                          ytd_distance_km: distance_km,
                                          ytd_count: count,
                                          ytd_time_secs: moving_time,
-                                         ytd_time_display: time_display,
                                          fastest,
                                          longest })
                    })
@@ -104,18 +101,6 @@ fn format_date(raw: &Option<String>) -> String {
   raw.as_deref().unwrap_or("").get(..10).unwrap_or("").to_string()
 }
 
-fn format_duration_secs(secs: f64) -> String {
-  let total_hours = (secs / 3600.0) as u32;
-  let days = total_hours / 24;
-  let hours = total_hours % 24;
-  let minutes = ((secs % 3600.0) / 60.0) as u32;
-  if days > 0 {
-    format!("{days}d {hours}h {minutes:02}m")
-  } else {
-    format!("{hours}h {minutes:02}m")
-  }
-}
-
 fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
   let pace_or_speed = match sport {
     SportType::Run => a.format_pace_per_km(),
@@ -128,7 +113,7 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
   ActivityHighlight { sport,
                       name: a.name.clone().unwrap_or_else(|| "Unnamed".to_string()),
                       distance_km: a.distance_km(),
-                      moving_time_display: a.format_moving_time(),
+                      moving_time_secs: a.moving_time,
                       pace_or_speed,
                       date: format_date(&a.start_date_local),
                       kudos: a.kudos_count,
@@ -158,7 +143,6 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
                 match best {
                   Some(b) => {
                     let estimated_secs = b.moving_time as f64 * target_km / b.distance_km();
-                    let est_time = format_estimated_time(estimated_secs);
                     let total_pace_secs = (estimated_secs / target_km).round() as u32;
                     let pace_whole = total_pace_secs / 60;
                     let pace_frac = total_pace_secs % 60;
@@ -167,7 +151,7 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
                     RunRaceBest { label,
                                   target_km,
                                   distance_km: Some(b.distance_km()),
-                                  moving_time_display: Some(est_time),
+                                  moving_time_secs: Some(estimated_secs.round() as u32),
                                   pace: Some(pace),
                                   name: Some(b.name
                                               .clone()
@@ -177,28 +161,13 @@ fn compute_race_bests(activities: &[SummaryActivity]) -> Vec<RunRaceBest> {
                   None => RunRaceBest { label,
                                         target_km,
                                         distance_km: None,
-                                        moving_time_display: None,
+                                        moving_time_secs: None,
                                         pace: None,
                                         name: None,
                                         date: None },
                 }
               })
               .collect()
-}
-
-/// Format an estimated time in seconds as "Xh Ym Zs" or "Ym Zs".
-fn format_estimated_time(secs: f64) -> String {
-  let total = secs.round() as u32;
-  let hours = total / 3600;
-  let minutes = (total % 3600) / 60;
-  let seconds = total % 60;
-  if hours > 0 {
-    format!("{hours}h {minutes:02}m {seconds:02}s")
-  } else if minutes > 0 {
-    format!("{minutes}m {seconds:02}s")
-  } else {
-    format!("{seconds}s")
-  }
 }
 
 #[cfg(test)]
@@ -247,7 +216,7 @@ mod tests {
     let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
 
     assert_eq!(ten_k.name.as_deref(), Some("Exact 10K"));
-    assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 00s"));
+    assert_eq!(ten_k.moving_time_secs, Some(3000));
   }
 
   #[test]
@@ -276,7 +245,7 @@ mod tests {
     let results = compute_race_bests(&[run]);
     let ten_k = results.iter().find(|r| r.label == "10K").unwrap();
 
-    assert_eq!(ten_k.moving_time_display.as_deref(), Some("50m 00s"));
+    assert_eq!(ten_k.moving_time_secs, Some(3000));
     assert_eq!(ten_k.pace.as_deref(), Some("5:00 /km"));
   }
 
@@ -355,13 +324,5 @@ mod tests {
     assert_eq!(last.sport, SportType::WeightTraining);
     assert!(last.pace_or_speed.is_empty());
     assert!(!last.is_mtb);
-  }
-
-  #[test]
-  fn test_format_duration_hours_under_24() {
-    assert_eq!(format_duration_secs(3600.0 * 95.0 + 180.0), "3d 23h 03m");
-    assert_eq!(format_duration_secs(3600.0 * 25.0), "1d 1h 00m");
-    assert_eq!(format_duration_secs(3600.0 * 2.5), "2h 30m");
-    assert_eq!(format_duration_secs(3600.0 * 48.0), "2d 0h 00m");
   }
 }

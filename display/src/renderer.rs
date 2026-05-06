@@ -1,4 +1,7 @@
 use crate::config::{DisplayConfig, GoalConfig, Orientation};
+use crate::format::{
+  fmt_distance_km, fmt_duration_long, fmt_duration_short, fmt_short_hours_prefix, fmt_short_min_sec,
+};
 use crate::icons;
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
@@ -303,7 +306,16 @@ fn bottom_right_group_size(font: &FontRef,
   };
 
   let width = bat_row_w.max(label_w).max(sync_w) as u32;
-  let height = if label_text.is_some() { s.u(56) } else { s.u(22) };
+  // The reserved height matches the topmost row's y offset (label at h-56,
+  // sync at h-40, battery at h-MARGIN). Polyline / activity layout uses
+  // it to keep clear of every row that's actually drawn.
+  let height = if label_text.is_some() {
+    s.u(56)
+  } else if debug {
+    s.u(40)
+  } else {
+    s.u(22)
+  };
   GroupSize { width, height }
 }
 
@@ -602,7 +614,7 @@ fn draw_goal_bar(img: &mut RgbImage,
   let summary = stats.sports.iter().find(|s| s.sport == sport);
   let ytd_km = summary.map(|s| s.ytd_distance_km).unwrap_or(0.0);
   let ytd_count = summary.map(|s| s.ytd_count).unwrap_or(0);
-  let ytd_time = summary.map(|s| s.ytd_time_display.as_str()).unwrap_or("0h 00m");
+  let ytd_time = fmt_duration_long(summary.map(|s| s.ytd_time_secs).unwrap_or(0));
   let noun = sport_count_noun(sport);
 
   let pct = if goal > 0.0 { (ytd_km / goal).min(1.0) } else { 0.0 };
@@ -734,7 +746,7 @@ fn draw_totals_row(img: &mut RgbImage,
   let center_text = format!("{} activities  ·  {:.0}km  ·  {}  ·  {:.0}m ↑  ·  {} kudos",
                             stats.activity_count,
                             stats.total_distance_km,
-                            stats.total_time_display(),
+                            fmt_duration_long(stats.total_moving_time_secs),
                             stats.total_elevation_gain_m,
                             stats.total_kudos,);
   let title_w = measure_text_width(font_bold, s.px(TITLE_FONT_SZ), TOTALS) as i32;
@@ -755,6 +767,9 @@ fn draw_totals_row(img: &mut RgbImage,
 // --- Longest / Fastest split ---
 
 /// Draw the LONGEST entries starting at (x, y). Returns y after the last entry.
+///
+/// Each row's distance, time, and pace/speed render in fixed columns so
+/// the same datum starts at the same x across rows.
 fn draw_longest_entries(img: &mut RgbImage,
                         font: &FontRef,
                         font_bold: &FontRef,
@@ -768,14 +783,64 @@ fn draw_longest_entries(img: &mut RgbImage,
   let detail_sz = PxScale::from(layout.lf_detail_font);
   let name_sz = PxScale::from(layout.lf_name_font);
   let text_x = x + s.u(ICON_SZ) as i32 + s.i(12);
+  let sep = "  ·  ";
+  let sep_w = measure_text_width(font_bold, detail_sz, sep) as i32;
+
+  // Pre-compute column widths from the actual rendered values. Time is
+  // split into an "Xh " sub-column (right-aligned, zero-width when no
+  // row has hours) and a "MMm SSs" sub-column (left-aligned) so the
+  // minute column starts at the same x even when some rows have no
+  // hours -- proportional fonts collapse the leading-blank padding from
+  // `fmt_duration_short`, which is why a single-string render misaligns.
+  let longests: Vec<&common::ActivityHighlight> =
+    stats.sports.iter().filter_map(|sp| sp.longest.as_ref()).collect();
+  let dist_col_w =
+    longests.iter()
+            .map(|l| {
+              measure_text_width(font_bold, detail_sz, &fmt_distance_km(l.distance_km)) as i32
+            })
+            .max()
+            .unwrap_or(0);
+  let h_prefix_col_w =
+    longests.iter()
+            .map(|l| {
+              measure_text_width(font_bold, detail_sz, &fmt_short_hours_prefix(l.moving_time_secs))
+              as i32
+            })
+            .max()
+            .unwrap_or(0);
+  let ms_col_w =
+    longests.iter()
+            .map(|l| {
+              measure_text_width(font_bold, detail_sz, &fmt_short_min_sec(l.moving_time_secs))
+              as i32
+            })
+            .max()
+            .unwrap_or(0);
+  let time_col_w = h_prefix_col_w + ms_col_w;
+
+  let time_x = text_x + dist_col_w + sep_w;
+  let ms_x = time_x + h_prefix_col_w;
+  let pace_x = time_x + time_col_w + sep_w;
 
   for sp in &stats.sports {
     let is_mtb = sp.longest.as_ref().is_some_and(|l| l.is_mtb);
     icons::draw_sport_icon(img, (x + s.i(4)) as u32, y as u32, sp.sport, is_mtb, BLACK, s.factor());
     if let Some(ref longest) = sp.longest {
-      let line1 = format!("{:.1}km  ·  {}  ·  {}",
-                          longest.distance_km, longest.moving_time_display, longest.pace_or_speed);
-      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &line1);
+      let dist = fmt_distance_km(longest.distance_km);
+      draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, &dist);
+      draw_text_mut(img, BLACK, text_x + dist_col_w, y + s.i(2), detail_sz, font_bold, sep);
+
+      let h_prefix = fmt_short_hours_prefix(longest.moving_time_secs);
+      if !h_prefix.is_empty() {
+        let h_w = measure_text_width(font_bold, detail_sz, &h_prefix) as i32;
+        draw_text_mut(img, BLACK, ms_x - h_w, y + s.i(2), detail_sz, font_bold, &h_prefix);
+      }
+      let ms = fmt_short_min_sec(longest.moving_time_secs);
+      draw_text_mut(img, BLACK, ms_x, y + s.i(2), detail_sz, font_bold, &ms);
+      draw_text_mut(img, BLACK, time_x + time_col_w, y + s.i(2), detail_sz, font_bold, sep);
+
+      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, &longest.pace_or_speed);
       let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
       draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else if stats.show_all_sports {
@@ -800,34 +865,84 @@ fn draw_fastest_entries(img: &mut RgbImage,
   let detail_sz = PxScale::from(layout.lf_detail_font);
   let name_sz = PxScale::from(layout.lf_name_font);
   let text_x = x + s.u(ICON_SZ) as i32 + s.i(12);
+  let sep = "  ·  ";
+  let sep_w = measure_text_width(font_bold, detail_sz, sep) as i32;
+  let dash_sep = "-  ";
+  let dash_sep_w = measure_text_width(font_bold, detail_sz, dash_sep) as i32;
 
-  // Render labels in a fixed-width column so values align across rows.
+  // Fixed-width columns: label, pace, time (split into hours prefix +
+  // minutes/seconds, same trick as `draw_longest_entries`).
   let label_col_w = stats.run_race_bests
                          .iter()
                          .map(|rb| measure_text_width(font_bold, detail_sz, rb.label) as i32)
                          .max()
                          .unwrap_or(0);
-  let value_x = text_x + label_col_w + s.i(8);
+  let pace_col_w = stats.run_race_bests
+                        .iter()
+                        .filter_map(|rb| rb.pace.as_deref())
+                        .map(|p| measure_text_width(font_bold, detail_sz, p) as i32)
+                        .max()
+                        .unwrap_or(0);
+  let h_prefix_col_w =
+    stats.run_race_bests
+         .iter()
+         .filter_map(|rb| rb.moving_time_secs)
+         .map(|t| measure_text_width(font_bold, detail_sz, &fmt_short_hours_prefix(t)) as i32)
+         .max()
+         .unwrap_or(0);
+  let ms_col_w =
+    stats.run_race_bests
+         .iter()
+         .filter_map(|rb| rb.moving_time_secs)
+         .map(|t| measure_text_width(font_bold, detail_sz, &fmt_short_min_sec(t)) as i32)
+         .max()
+         .unwrap_or(0);
+
+  let pace_x = text_x + label_col_w + s.i(8) + dash_sep_w;
+  let time_x = pace_x + pace_col_w + sep_w;
+  let ms_x = time_x + h_prefix_col_w;
+  let suffix_x = ms_x + ms_col_w;
 
   for rb in &stats.run_race_bests {
     icons::draw_runner(img, (x + s.i(4)) as u32, y as u32, BLACK, s.factor());
     draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font_bold, rb.label);
-    if let (Some(pace), Some(dist), Some(time)) =
-      (&rb.pace, rb.distance_km, &rb.moving_time_display)
+    if let (Some(pace), Some(dist), Some(time_secs)) =
+      (&rb.pace, rb.distance_km, rb.moving_time_secs)
     {
-      let value = format!("-  {}  ·  {}", pace, time);
-      draw_text_mut(img, BLACK, value_x, y + s.i(2), detail_sz, font_bold, &value);
+      draw_text_mut(img,
+                    BLACK,
+                    text_x + label_col_w + s.i(8),
+                    y + s.i(2),
+                    detail_sz,
+                    font_bold,
+                    dash_sep);
+      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, pace);
+      draw_text_mut(img, BLACK, pace_x + pace_col_w, y + s.i(2), detail_sz, font_bold, sep);
+
+      let h_prefix = fmt_short_hours_prefix(time_secs);
+      if !h_prefix.is_empty() {
+        let h_w = measure_text_width(font_bold, detail_sz, &h_prefix) as i32;
+        draw_text_mut(img, BLACK, ms_x - h_w, y + s.i(2), detail_sz, font_bold, &h_prefix);
+      }
+      let ms = fmt_short_min_sec(time_secs);
+      draw_text_mut(img, BLACK, ms_x, y + s.i(2), detail_sz, font_bold, &ms);
+
       if dist > rb.target_km * 1.1 {
-        let value_w = measure_text_width(font_bold, detail_sz, &value) as i32;
         let suffix = format!("  ·  ({:.1}km)", dist);
-        draw_text_mut(img, BLACK, value_x + value_w, y + s.i(2), detail_sz, font, &suffix);
+        draw_text_mut(img, BLACK, suffix_x, y + s.i(2), detail_sz, font, &suffix);
       }
       let name = rb.name.as_deref().unwrap_or("—");
       let date = rb.date.as_deref().unwrap_or("—");
       let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
       draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else {
-      draw_text_mut(img, BLACK, value_x, y + s.i(2), detail_sz, font_bold, "—");
+      draw_text_mut(img,
+                    BLACK,
+                    text_x + label_col_w + s.i(8),
+                    y + s.i(2),
+                    detail_sz,
+                    font_bold,
+                    "—");
     }
     y += layout.lf_entry_h;
   }
@@ -1006,12 +1121,13 @@ fn draw_last_activity(img: &mut RgbImage,
                             font_emoji,
                             &line1);
 
+    let last_time = fmt_duration_short(last.moving_time_secs);
     let line2 = match last.sport {
       SportType::WeightTraining | SportType::Yoga | SportType::Pilates | SportType::Workout => {
-        format!("{}  ·  {} kudos", last.moving_time_display, last.kudos)
+        format!("{}  ·  {} kudos", last_time, last.kudos)
       },
       _ => format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
-                   last.distance_km, last.pace_or_speed, last.moving_time_display, last.kudos),
+                   last.distance_km, last.pace_or_speed, last_time, last.kudos),
     };
     draw_text_mut(img,
                   SECONDARY_COLOR,
@@ -1032,13 +1148,18 @@ fn draw_last_activity(img: &mut RgbImage,
     let show_kudos = !config.show_totals && stats.total_kudos > 0;
 
     let bounds = if config.orientation == Orientation::Portrait {
-      // Portrait: polyline below text, full width
+      // Portrait: polyline below text, full width.
+      //
+      // Line 2 is drawn at y + 56 in an 18pt font (~24px tall), so its
+      // bottom is at ~y + 80. Start the polyline at y + 84 to leave a
+      // 4px gap.
       let px = s.u(MARGIN as u32);
-      let py = (y + s.i(68)) as u32;
+      let py = (y + s.i(84)) as u32;
       let pw = canvas_right - px;
-      // Stop before kudos text or battery indicator
+      // Stop above the kudos line (top of 18pt text at h-MARGIN-24) or
+      // the battery indicator group, with a 4px clearance.
       let max_bottom = if show_kudos {
-        s.u(c.h) - s.u(MARGIN as u32) - s.u(24)
+        s.u(c.h) - s.u(MARGIN as u32) - s.u(28)
       } else {
         s.u(c.h) - bat_h - s.u(4)
       };

@@ -26,13 +26,12 @@ pub enum LongestBy {
 /// year).
 #[derive(Debug, Clone)]
 pub struct SportSummary {
-  pub sport:            SportType,
-  pub ytd_distance_km:  f64,
-  pub ytd_count:        u32,
-  pub ytd_time_secs:    f64,
-  pub ytd_time_display: String,
-  pub fastest:          Option<ActivityHighlight>,
-  pub longest:          Option<ActivityHighlight>,
+  pub sport:           SportType,
+  pub ytd_distance_km: f64,
+  pub ytd_count:       u32,
+  pub ytd_time_secs:   u32,
+  pub fastest:         Option<ActivityHighlight>,
+  pub longest:         Option<ActivityHighlight>,
 }
 
 /// Best effort for a standard running race distance.
@@ -40,13 +39,13 @@ pub struct SportSummary {
 /// no matching activity exists.
 #[derive(Debug, Clone)]
 pub struct RunRaceBest {
-  pub label:               &'static str,
-  pub target_km:           f64,
-  pub distance_km:         Option<f64>,
-  pub moving_time_display: Option<String>,
-  pub pace:                Option<String>,
-  pub name:                Option<String>,
-  pub date:                Option<String>,
+  pub label:            &'static str,
+  pub target_km:        f64,
+  pub distance_km:      Option<f64>,
+  pub moving_time_secs: Option<u32>,
+  pub pace:             Option<String>,
+  pub name:             Option<String>,
+  pub date:             Option<String>,
 }
 
 /// All the stats we want to display on the dashboard.
@@ -119,34 +118,21 @@ impl std::fmt::Display for BatteryStatus {
 /// last).
 #[derive(Debug, Clone)]
 pub struct ActivityHighlight {
-  pub sport:               SportType,
-  pub name:                String,
-  pub distance_km:         f64,
-  pub moving_time_display: String,
-  pub pace_or_speed:       String,
-  pub date:                String,
-  pub kudos:               u32,
+  pub sport:            SportType,
+  pub name:             String,
+  pub distance_km:      f64,
+  pub moving_time_secs: u32,
+  pub pace_or_speed:    String,
+  pub date:             String,
+  pub kudos:            u32,
   /// True when the activity is a mountain bike ride (MountainBikeRide).
-  pub is_mtb:              bool,
+  pub is_mtb:           bool,
 }
 
 impl DashboardStats {
   /// Number of activities
   pub fn activity_count(&self) -> usize {
     self.activity_count
-  }
-
-  /// Format total moving time as "Xd Yh Zm" (includes days when >= 24h)
-  pub fn total_time_display(&self) -> String {
-    let total_secs = self.total_moving_time_secs;
-    let days = total_secs / 86400;
-    let hours = (total_secs % 86400) / 3600;
-    let minutes = (total_secs % 3600) / 60;
-    if days > 0 {
-      format!("{days}d {hours}h {minutes}m")
-    } else {
-      format!("{hours}h {minutes}m")
-    }
   }
 
   /// Look up YTD distance for a given sport (0.0 if not active).
@@ -169,15 +155,15 @@ impl DashboardStats {
         SportType::Pilates => "🤸",
         SportType::Workout => "💪",
       };
-      println!("{} YTD {:?}: {:.1} km · {} activities · {}",
-               icon, s.sport, s.ytd_distance_km, s.ytd_count, s.ytd_time_display);
+      println!("{} YTD {:?}: {:.1} km · {} activities · {}s",
+               icon, s.sport, s.ytd_distance_km, s.ytd_count, s.ytd_time_secs);
       if let Some(ref a) = s.fastest {
-        println!("  ⚡ Fastest: \"{}\" — {:.1} km in {} ({})",
-                 a.name, a.distance_km, a.moving_time_display, a.pace_or_speed);
+        println!("  ⚡ Fastest: \"{}\" — {:.1} km in {}s ({})",
+                 a.name, a.distance_km, a.moving_time_secs, a.pace_or_speed);
       }
       if let Some(ref a) = s.longest {
-        println!("  📏 Longest: \"{}\" — {:.1} km in {}",
-                 a.name, a.distance_km, a.moving_time_display);
+        println!("  📏 Longest: \"{}\" — {:.1} km in {}s",
+                 a.name, a.distance_km, a.moving_time_secs);
       }
     }
     println!();
@@ -198,10 +184,10 @@ impl DashboardStats {
       println!();
     }
 
-    println!("📊 Totals: {:.1} km · {} activities · {} · {:.0}m ↑ · {} kudos",
+    println!("📊 Totals: {:.1} km · {} activities · {}s · {:.0}m ↑ · {} kudos",
              self.total_distance_km,
              self.activity_count,
-             self.total_time_display(),
+             self.total_moving_time_secs,
              self.total_elevation_gain_m,
              self.total_kudos);
     println!();
