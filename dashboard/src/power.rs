@@ -43,6 +43,15 @@ pub fn read_battery() -> Option<common::BatteryStatus> {
   }
 }
 
+/// Outcome of an on-power rest period.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestOutcome {
+  /// Sleep duration elapsed normally -- run the next refresh cycle.
+  Refresh,
+  /// Power was disconnected during rest -- switch to battery handling.
+  PowerLost,
+}
+
 /// Power mode for the RPi.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -186,11 +195,36 @@ impl PowerManager {
     }
   }
 
-  /// Stay in Normal mode and sleep for `sleep_secs`. Used on external power.
-  pub fn rest_on_power(&mut self, sleep_secs: u64) {
+  /// Stay in Normal mode and sleep for `sleep_secs` total, polling the
+  /// battery sensor every `poll_secs` so the device can react quickly when
+  /// the power cable is unplugged.
+  ///
+  /// Returns `RestOutcome::Refresh` once the full duration has elapsed, or
+  /// `RestOutcome::PowerLost` as soon as the sensor reports discharging.
+  /// A missing battery sensor (no UPS board) is treated as still on power.
+  pub fn rest_on_power(&mut self, sleep_secs: u64, poll_secs: u64) -> RestOutcome {
     self.set_normal();
-    log::info!("On power -- sleeping {sleep_secs}s before next cycle");
-    std::thread::sleep(Duration::from_secs(sleep_secs));
+
+    if sleep_secs == 0 {
+      return RestOutcome::Refresh;
+    }
+    let chunk_secs = poll_secs.clamp(1, sleep_secs);
+    log::info!("On power -- resting {sleep_secs}s (battery poll every {chunk_secs}s)");
+
+    let mut waited = 0u64;
+    while waited < sleep_secs {
+      let chunk = chunk_secs.min(sleep_secs - waited);
+      std::thread::sleep(Duration::from_secs(chunk));
+      waited += chunk;
+
+      if let Some(b) = read_battery()
+         && !b.is_charging()
+      {
+        log::info!("Power lost during on-power rest -- switching to battery flow");
+        return RestOutcome::PowerLost;
+      }
+    }
+    RestOutcome::Refresh
   }
 
   /// Enter low-power mode, linger for SSH, then shut down or software-sleep.

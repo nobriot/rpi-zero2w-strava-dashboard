@@ -12,10 +12,13 @@ pub enum SleepPlan {
 }
 
 /// Compute the sleep plan based on power state and config.
+///
+/// On power: always OnPower. The device stays awake (`shutdown_after_cycle`
+/// and `tpl5110_done_pin` only fire on battery).
 pub fn plan(power: &PowerConfig, battery: Option<&BatteryStatus>) -> SleepPlan {
   let on_power = battery.is_none() || battery.is_some_and(|b| b.is_charging());
 
-  if on_power && !power.shutdown_after_cycle && power.tpl5110_done_pin.is_none() {
+  if on_power {
     return SleepPlan::OnPower { sleep_secs: power.charging_interval_secs, };
   }
 
@@ -163,6 +166,18 @@ mod tests {
     let cfg = power_config();
     let p = plan(&cfg, None);
     assert!(matches!(p, SleepPlan::OnPower { sleep_secs: 600 }));
+  }
+
+  #[test]
+  fn plan_on_power_overrides_shutdown_settings() {
+    // Even if shutdown_after_cycle / TPL5110 are set, on power the device
+    // should stay awake.
+    let mut cfg = power_config();
+    cfg.shutdown_after_cycle = true;
+    cfg.tpl5110_done_pin = Some(16);
+    let bat = battery(true);
+    assert!(matches!(plan(&cfg, Some(&bat)), SleepPlan::OnPower { .. }));
+    assert!(matches!(plan(&cfg, None), SleepPlan::OnPower { .. }));
   }
 
   #[test]

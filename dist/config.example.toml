@@ -87,6 +87,13 @@ shutdown_after_cycle = false
 # detected (e.g. running on a dev machine). Default: 1200 (20 minutes)
 charging_interval_secs = 1200
 
+# While on power, how often (seconds) to poll the battery sensor to detect
+# that the cable was unplugged. The device stays awake on power even when
+# shutdown_after_cycle / tpl5110_done_pin are set, but transitions to the
+# battery flow (and possibly shuts down) within this poll interval after
+# power is lost. Default: 60.
+power_poll_interval_secs = 60
+
 # Seconds to stay awake after each refresh cycle before sleeping or shutting
 # down. Gives a window for SSH access. Default: 120 (2 minutes)
 linger_secs = 120

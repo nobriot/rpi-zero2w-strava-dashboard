@@ -1,9 +1,9 @@
 use crate::args::Args;
-use crate::config::Config;
+use crate::config::{Config, PowerConfig};
 use crate::cycle;
 use crate::errors::Result;
 use crate::heartbeat::write_heartbeat;
-use crate::power::{self, PowerManager};
+use crate::power::{self, PowerManager, RestOutcome};
 use crate::schedule::{self, SleepPlan};
 
 /// Main event loop: fetch -> render -> sleep, repeat.
@@ -30,16 +30,44 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
       return Ok(());
     }
 
-    let battery = power::read_battery();
-    match schedule::plan(&config.power, battery.as_ref()) {
-      SleepPlan::OnPower { sleep_secs } => power_mgr.rest_on_power(sleep_secs),
-      SleepPlan::Battery { sleep_secs, linger_secs } => {
-        let battery_pct = battery.as_ref().map(|b| b.percentage());
-        if power_mgr.rest_on_battery(&config.power, sleep_secs, linger_secs, battery_pct) {
-          return Ok(());
-        }
-      },
+    if rest_between_cycles(&config.power, &mut power_mgr) {
+      return Ok(());
     }
+  }
+}
+
+/// Sleep between dashboard cycles. On power, polls so a cable unplug is
+/// noticed within `power_poll_interval_secs`; on battery, lingers and then
+/// either sleeps or shuts down.
+///
+/// Returns `true` when a hard shutdown was initiated and the main loop
+/// should exit.
+fn rest_between_cycles(power: &PowerConfig, mgr: &mut PowerManager) -> bool {
+  let battery = power::read_battery();
+  match schedule::plan(power, battery.as_ref()) {
+    SleepPlan::OnPower { sleep_secs } => {
+      match mgr.rest_on_power(sleep_secs, power.power_poll_interval_secs) {
+        RestOutcome::Refresh => false,
+        RestOutcome::PowerLost => rest_on_battery_now(power, mgr),
+      }
+    },
+    SleepPlan::Battery { sleep_secs, linger_secs } => {
+      let battery_pct = battery.as_ref().map(|b| b.percentage());
+      mgr.rest_on_battery(power, sleep_secs, linger_secs, battery_pct)
+    },
+  }
+}
+
+/// Re-evaluate the schedule with a fresh battery read and run the battery
+/// rest path. If power happens to be back, just refresh on the next cycle.
+fn rest_on_battery_now(power: &PowerConfig, mgr: &mut PowerManager) -> bool {
+  let battery = power::read_battery();
+  match schedule::plan(power, battery.as_ref()) {
+    SleepPlan::Battery { sleep_secs, linger_secs } => {
+      let battery_pct = battery.as_ref().map(|b| b.percentage());
+      mgr.rest_on_battery(power, sleep_secs, linger_secs, battery_pct)
+    },
+    SleepPlan::OnPower { .. } => false,
   }
 }
 

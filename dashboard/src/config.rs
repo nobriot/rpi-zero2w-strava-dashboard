@@ -79,6 +79,12 @@ pub struct PowerConfig {
   #[serde(default = "default_charging_interval")]
   pub charging_interval_secs: u64,
 
+  /// While on power, how often (seconds) to poll the battery sensor to
+  /// detect that the cable was unplugged. Lower values react faster to
+  /// power loss; higher values use marginally less CPU. Default: 60.
+  #[serde(default = "default_power_poll_interval")]
+  pub power_poll_interval_secs: u64,
+
   /// Seconds to stay awake after each refresh cycle before sleeping or
   /// shutting down. Gives a window for SSH access. Default: 120 (2 minutes).
   #[serde(default = "default_linger")]
@@ -109,6 +115,9 @@ fn default_sleep_interval() -> u64 {
 fn default_charging_interval() -> u64 {
   1200
 }
+fn default_power_poll_interval() -> u64 {
+  60
+}
 fn default_linger() -> u64 {
   120
 }
@@ -122,6 +131,7 @@ impl Default for PowerConfig {
            quiet_hours:               QuietHours::default(),
            shutdown_after_cycle:      false,
            charging_interval_secs:    default_charging_interval(),
+           power_poll_interval_secs:  default_power_poll_interval(),
            linger_secs:               default_linger(),
            ssh_inhibit_below_percent: default_ssh_inhibit(),
            sync_firmware:             false,
