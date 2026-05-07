@@ -487,10 +487,7 @@ mod tests {
     assert!(pm.wifi_blocked);
   }
 
-  #[test]
-  fn shutdown_returns_false_on_dev_machine() {
-    // On dev machines, shutdown -h now should fail (no sudo/permissions)
-    let mut pm = PowerManager::new(None);
-    assert!(!pm.shutdown());
-  }
+  // Note: `shutdown()` is intentionally not unit-tested. It shells out to
+  // `sync` and `sudo shutdown -h now`, which would prompt for a password on
+  // dev machines (or actually halt CI hosts with passwordless sudo).
 }
