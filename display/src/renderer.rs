@@ -7,7 +7,7 @@ use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use chrono::{Datelike, Utc};
 use common::{BatteryStatus, DashboardStats, SportType};
 use image::{Rgb, RgbImage};
-use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut};
+use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
 
 const LANDSCAPE_W: u32 = 800;
@@ -1275,10 +1275,7 @@ fn draw_polyline(img: &mut RgbImage,
     (dw, dh, (bounds.w as f64 - dw) / 2.0, 0.0)
   };
 
-  let thickness = s.u(thickness.max(1));
-  let radius = thickness as f32 / 2.0;
-  let r_sq = radius * radius;
-  let (img_w, img_h) = (img.width(), img.height());
+  let radius = (s.u(thickness.max(1)) as f32) / 2.0;
 
   let px_points: Vec<(f32, f32)> =
     points.iter()
@@ -1292,39 +1289,76 @@ fn draw_polyline(img: &mut RgbImage,
           .collect();
 
   for window in px_points.windows(2) {
-    let (x0, y0) = window[0];
-    let (x1, y1) = window[1];
-
-    let dx = x1 - x0;
-    let dy = y1 - y0;
-    let len = (dx * dx + dy * dy).sqrt();
-    let (nx, ny) = if len > 0.0 { (-dy / len, dx / len) } else { (1.0, 0.0) };
-    let half = (thickness as f32 - 1.0) / 2.0;
-    for i in 0..thickness {
-      let off = i as f32 - half;
-      let ox = nx * off;
-      let oy = ny * off;
-      draw_line_segment_mut(img, (x0 + ox, y0 + oy), (x1 + ox, y1 + oy), RED);
-    }
+    fill_capsule(img, window[0], window[1], radius, RED);
   }
+}
 
-  if thickness > 1 {
-    for &(cx, cy) in &px_points {
-      let ix_min = ((cx - radius) as i32).max(0);
-      let ix_max = ((cx + radius) as i32 + 1).min(img_w as i32);
-      let iy_min = ((cy - radius) as i32).max(0);
-      let iy_max = ((cy + radius) as i32 + 1).min(img_h as i32);
-      for iy in iy_min..iy_max {
-        for ix in ix_min..ix_max {
-          let dx = ix as f32 - cx;
-          let dy = iy as f32 - cy;
-          if dx * dx + dy * dy <= r_sq {
-            img.put_pixel(ix as u32, iy as u32, RED);
-          }
-        }
+/// Rasterize a single segment as a "capsule" (rectangle with semicircular
+/// caps): every pixel whose centre is within `radius` of the segment is
+/// filled. Adjacent capsules overlap at joints and endpoints, so polylines
+/// drawn this way have no gaps regardless of joint angle, and rounded ends
+/// emerge for free.
+///
+/// A 1-pixel coverage falloff at the edge gives soft anti-aliased borders,
+/// which the supersample -> area-average -> palette quantization pipeline
+/// turns into clean edges on the e-paper output.
+fn fill_capsule(img: &mut RgbImage, p0: (f32, f32), p1: (f32, f32), radius: f32, color: Rgb<u8>) {
+  let (img_w, img_h) = (img.width() as i32, img.height() as i32);
+  let (x0, y0) = p0;
+  let (x1, y1) = p1;
+
+  // Bounding box, padded by radius + 0.5 so the AA edge band is included.
+  let pad = radius + 0.5;
+  let xmin = (x0.min(x1) - pad).floor() as i32;
+  let xmax = (x0.max(x1) + pad).ceil() as i32;
+  let ymin = (y0.min(y1) - pad).floor() as i32;
+  let ymax = (y0.max(y1) + pad).ceil() as i32;
+  let xmin = xmin.max(0);
+  let xmax = xmax.min(img_w - 1);
+  let ymin = ymin.max(0);
+  let ymax = ymax.min(img_h - 1);
+
+  let dx = x1 - x0;
+  let dy = y1 - y0;
+  let len2 = dx * dx + dy * dy;
+
+  for y in ymin..=ymax {
+    for x in xmin..=xmax {
+      // Sample at the pixel centre.
+      let px = x as f32 + 0.5;
+      let py = y as f32 + 0.5;
+      // Closest point on the segment to the pixel centre: project the
+      // pixel-to-p0 vector onto the segment direction, clamp to [0,1].
+      let t = if len2 > 0.0 {
+        (((px - x0) * dx + (py - y0) * dy) / len2).clamp(0.0, 1.0)
+      } else {
+        0.0
+      };
+      let cx = x0 + t * dx;
+      let cy = y0 + t * dy;
+      let ex = px - cx;
+      let ey = py - cy;
+      let dist = (ex * ex + ey * ey).sqrt();
+      let coverage = (radius + 0.5 - dist).clamp(0.0, 1.0);
+      if coverage <= 0.0 {
+        continue;
+      }
+      if coverage >= 1.0 {
+        img.put_pixel(x as u32, y as u32, color);
+      } else {
+        let bg = *img.get_pixel(x as u32, y as u32);
+        img.put_pixel(x as u32, y as u32, blend_rgb(bg, color, coverage));
       }
     }
   }
+}
+
+fn blend_rgb(bg: Rgb<u8>, fg: Rgb<u8>, alpha: f32) -> Rgb<u8> {
+  let mix = |b: u8, f: u8| -> u8 {
+    let v = b as f32 + (f as f32 - b as f32) * alpha;
+    v.clamp(0.0, 255.0).round() as u8
+  };
+  Rgb([mix(bg[0], fg[0]), mix(bg[1], fg[1]), mix(bg[2], fg[2])])
 }
 
 // --- Helpers ---
