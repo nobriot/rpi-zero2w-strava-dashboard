@@ -180,7 +180,7 @@ fn load_or_fetch_avatar(client: &strava::client::Client,
      && let Ok(bytes) = std::fs::read(&cache_path)
      && !bytes.is_empty()
   {
-    log::debug!("Avatar loaded from cache");
+    log::debug!("Avatar loaded from cache: {} ({} bytes)", cache_path.display(), bytes.len());
     return Some(bytes);
   }
 
@@ -188,14 +188,20 @@ fn load_or_fetch_avatar(client: &strava::client::Client,
   log::info!("Downloading avatar from {url}");
   match client.download_bytes(url) {
     Ok(bytes) => {
-      if let Some(parent) = cache_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+      log::debug!("Avatar downloaded: {} bytes", bytes.len());
+      if let Some(parent) = cache_path.parent()
+         && let Err(e) = std::fs::create_dir_all(parent)
+      {
+        log::warn!("Failed to create avatar cache directory {}: {e}", parent.display());
       }
-      let _ = std::fs::write(&cache_path, &bytes);
+      match std::fs::write(&cache_path, &bytes) {
+        Ok(()) => log::debug!("Avatar cached at {}", cache_path.display()),
+        Err(e) => log::warn!("Failed to write avatar cache {}: {e}", cache_path.display()),
+      }
       Some(bytes)
     },
     Err(e) => {
-      log::warn!("Failed to download avatar: {e}");
+      log::warn!("Failed to download avatar from {url}: {e}");
       None
     },
   }
