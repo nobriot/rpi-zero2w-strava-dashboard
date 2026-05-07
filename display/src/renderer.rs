@@ -246,21 +246,21 @@ pub fn render_dashboard(stats: &DashboardStats,
     y
   };
   let show_ip = !is_offline && config.display_ip_address && ip_address.is_some();
-  let label_text = if is_offline {
-    Some("OFFLINE")
+  let label = if is_offline {
+    Some(BottomLabel::Offline)
   } else if show_ip {
-    ip_address
+    ip_address.map(BottomLabel::Ip)
   } else {
     None
   };
-  let group = bottom_right_group_size(&font, &font_bold, battery, label_text, config.debug, s);
+  let group = bottom_right_group_size(&font, &font_bold, battery, label, config.debug, s);
   draw_last_activity(&mut img, &font, &font_bold, &font_emoji, stats, y, group, config, c, s);
 
   draw_battery_indicator(&mut img,
                          &font,
                          &font_bold,
                          battery,
-                         label_text,
+                         label,
                          config.debug,
                          group.width,
                          c,
@@ -272,6 +272,42 @@ pub fn render_dashboard(stats: &DashboardStats,
     image::imageops::rotate90(&img)
   } else {
     img
+  }
+}
+
+/// Bottom-right status label.
+///
+/// `Offline` is rendered prominently (bold, larger) since it signals a real
+/// problem; `Ip` is informational and uses the same regular font / size as
+/// the debug sync timestamp so it blends in.
+#[derive(Copy, Clone)]
+enum BottomLabel<'a> {
+  Offline,
+  Ip(&'a str),
+}
+
+impl<'a> BottomLabel<'a> {
+  fn text(&self) -> &'a str {
+    match *self {
+      BottomLabel::Offline => "OFFLINE",
+      BottomLabel::Ip(s) => s,
+    }
+  }
+
+  /// Pick the rendering font for this label. `Ip` matches the regular sync
+  /// timestamp font; `Offline` keeps the bold style for visibility.
+  fn font<'f>(&self, font: &'f FontRef<'f>, font_bold: &'f FontRef<'f>) -> &'f FontRef<'f> {
+    match self {
+      BottomLabel::Offline => font_bold,
+      BottomLabel::Ip(_) => font,
+    }
+  }
+
+  fn px_scale(&self) -> f32 {
+    match self {
+      BottomLabel::Offline => 14.0,
+      BottomLabel::Ip(_) => 12.0,
+    }
   }
 }
 
@@ -287,7 +323,7 @@ struct GroupSize {
 fn bottom_right_group_size(font: &FontRef,
                            font_bold: &FontRef,
                            battery: Option<&BatteryStatus>,
-                           label_text: Option<&str>,
+                           label: Option<BottomLabel>,
                            debug: bool,
                            s: Scale)
                            -> GroupSize {
@@ -297,7 +333,8 @@ fn bottom_right_group_size(font: &FontRef,
   let bat_row_w = text_w + s.i(4) + s.i(24);
 
   let label_w =
-    label_text.map(|t| measure_text_width(font_bold, s.px(14.0), t) as i32).unwrap_or(0);
+    label.map(|l| measure_text_width(l.font(font, font_bold), s.px(l.px_scale()), l.text()) as i32)
+         .unwrap_or(0);
   let sync_w = if debug {
     let sync_text = chrono::Local::now().format("%d/%m %H:%M").to_string();
     measure_text_width(font, s.px(12.0), &sync_text) as i32
@@ -309,7 +346,7 @@ fn bottom_right_group_size(font: &FontRef,
   // The reserved height matches the topmost row's y offset (label at h-56,
   // sync at h-40, battery at h-MARGIN). Polyline / activity layout uses
   // it to keep clear of every row that's actually drawn.
-  let height = if label_text.is_some() {
+  let height = if label.is_some() {
     s.u(56)
   } else if debug {
     s.u(40)
@@ -326,7 +363,7 @@ fn draw_battery_indicator(img: &mut RgbImage,
                           font: &FontRef,
                           font_bold: &FontRef,
                           battery: Option<&BatteryStatus>,
-                          label_text: Option<&str>,
+                          label: Option<BottomLabel>,
                           debug: bool,
                           group_w: u32,
                           c: Canvas,
@@ -340,9 +377,9 @@ fn draw_battery_indicator(img: &mut RgbImage,
 
   let x = s.u(c.w) as i32 - group_w as i32;
 
-  if let Some(t) = label_text {
+  if let Some(l) = label {
     let y_label = s.u(c.h) as i32 - s.i(56);
-    draw_text_mut(img, BLACK, x, y_label, s.px(14.0), font_bold, t);
+    draw_text_mut(img, BLACK, x, y_label, s.px(l.px_scale()), l.font(font, font_bold), l.text());
   }
 
   if debug {
@@ -1282,7 +1319,7 @@ fn draw_polyline(img: &mut RgbImage,
           let dx = ix as f32 - cx;
           let dy = iy as f32 - cy;
           if dx * dx + dy * dy <= r_sq {
-            img.put_pixel(ix as u32, iy as u32, ORANGE);
+            img.put_pixel(ix as u32, iy as u32, RED);
           }
         }
       }
