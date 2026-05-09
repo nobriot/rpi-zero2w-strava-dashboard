@@ -60,20 +60,9 @@ just deploy pi@<host> <config.toml>
 
 ---
 
-## Architecture
-
-Cargo workspace with 3 crates:
-
-| Crate | Type | Runs on | Purpose |
-|-------|------|---------|---------|
-| **`strava`** | library | — | Strava API client, OAuth, caching, stats |
-| **`display`** | library | — | E-paper renderer, hardware drivers (SPI, I2C) |
-| **`dashboard`** | binary | RPi/dev machine | Main loop: fetch → render → display |
-
----
-
 ## Credits
 
 Totally inspired by [Ibis Dash](https://github.com/ibisette/Ibis_Dash_Esp32s3_PhotoPainter).
+
 See also: [Statistics-for-Strava](https://github.com/robiningelbrecht/statistics-for-strava).
 
