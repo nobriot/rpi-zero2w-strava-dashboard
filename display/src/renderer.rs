@@ -935,10 +935,10 @@ fn draw_fastest_entries(img: &mut RgbImage,
          .max()
          .unwrap_or(0);
 
-  let pace_x = text_x + label_col_w + s.i(8) + dash_sep_w;
-  let time_x = pace_x + pace_col_w + sep_w;
+  let time_x = text_x + label_col_w + s.i(8) + dash_sep_w;
   let ms_x = time_x + h_prefix_col_w;
-  let suffix_x = ms_x + ms_col_w;
+  let pace_x = time_x + h_prefix_col_w + ms_col_w + sep_w;
+  let suffix_x = pace_x + pace_col_w;
 
   for rb in &stats.run_race_bests {
     icons::draw_runner(img, (x + s.i(4)) as u32, y as u32, BLACK, s.factor());
@@ -953,9 +953,6 @@ fn draw_fastest_entries(img: &mut RgbImage,
                     detail_sz,
                     font_bold,
                     dash_sep);
-      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, pace);
-      draw_text_mut(img, BLACK, pace_x + pace_col_w, y + s.i(2), detail_sz, font_bold, sep);
-
       let h_prefix = fmt_short_hours_prefix(time_secs);
       if !h_prefix.is_empty() {
         let h_w = measure_text_width(font_bold, detail_sz, &h_prefix) as i32;
@@ -963,6 +960,9 @@ fn draw_fastest_entries(img: &mut RgbImage,
       }
       let ms = fmt_short_min_sec(time_secs);
       draw_text_mut(img, BLACK, ms_x, y + s.i(2), detail_sz, font_bold, &ms);
+      draw_text_mut(img, BLACK, ms_x + ms_col_w, y + s.i(2), detail_sz, font_bold, sep);
+
+      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, pace);
 
       if dist > rb.target_km * 1.1 {
         let suffix = format!("  ·  ({:.1}km)", dist);
