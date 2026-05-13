@@ -58,7 +58,7 @@ fn run_once(config: &mut Config,
                                   display_cfg: &display_cfg,
                                   scale:       args.scale,
                                   save_png:    args.save_png.as_deref().map(Path::new),
-                                  skip_epaper: args.kiosk, })?;
+                                  kiosk:       args.kiosk, })?;
 
   fetched.stats.print_summary();
   Ok(())

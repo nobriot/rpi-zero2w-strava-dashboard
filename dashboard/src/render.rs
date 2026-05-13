@@ -10,7 +10,7 @@ pub struct RenderRequest<'a> {
   pub display_cfg: &'a display::config::DisplayConfig,
   pub scale:       u32,
   pub save_png:    Option<&'a Path>,
-  pub skip_epaper: bool,
+  pub kiosk:       bool,
 }
 
 /// Render the dashboard and present it: save PNG if requested, push to the
@@ -26,11 +26,17 @@ pub fn present(req: RenderRequest<'_>) -> Result<()> {
                                                     preview_scale);
 
   if let Some(path) = req.save_png {
-    preview.save(path).map_err(render_err)?;
+    let to_save =
+      if req.kiosk && req.display_cfg.orientation == display::config::Orientation::Portrait {
+        image::imageops::rotate270(&preview)
+      } else {
+        preview.clone()
+      };
+    to_save.save(path).map_err(render_err)?;
     log::info!("Dashboard saved to {}", path.display());
   }
 
-  if req.skip_epaper {
+  if req.kiosk {
     return Ok(());
   }
 
