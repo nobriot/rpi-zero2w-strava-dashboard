@@ -129,7 +129,7 @@ preview:
 
 # Render a preview for a specific test config
 preview-config config:
-    cargo run -- --once --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 2
+    cargo run -- --once --kiosk --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 2
 
 # Update gallery images in the book by re-rendering nicolas, sabrina and sabrina-portrait
 gallery:

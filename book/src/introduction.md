@@ -5,7 +5,7 @@ This project turns a
 into a Strava dashboard. It pulls activity data from Strava and renders a
 configurable dashboard onto the 6-colors e-paper screen.
 
-![Dashboard example](images/dashboard-example.png)
+![Dashboard example](images/gallery/sabrina.png)
 
 ## Features
 
