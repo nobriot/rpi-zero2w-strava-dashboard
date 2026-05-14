@@ -1262,7 +1262,12 @@ fn draw_polyline(img: &mut RgbImage,
   let lat_range = (max_lat - min_lat).max(1e-6);
   let lon_range = (max_lon - min_lon).max(1e-6);
 
-  let route_aspect = lon_range / lat_range;
+  // One degree of longitude shrinks with latitude as cos(lat); without this
+  // correction routes at non-equatorial latitudes get stretched horizontally.
+  let cos_lat = (((min_lat + max_lat) * 0.5).to_radians()).cos().max(0.01);
+  let lon_range_display = lon_range * cos_lat;
+
+  let route_aspect = lon_range_display / lat_range;
   let area_aspect = bounds.w as f64 / bounds.h as f64;
 
   let (draw_w, draw_h, off_x, off_y) = if route_aspect > area_aspect {
