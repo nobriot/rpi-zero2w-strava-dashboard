@@ -1190,49 +1190,52 @@ fn draw_last_activity(img: &mut RgbImage,
                   font,
                   &line2);
 
-    // Bottom reserves for battery indicator and optional elements.
-    // Add a small horizontal margin so the polyline never butts up against
-    // the right-aligned text/icon column.
-    let bat_w = group.width + s.u(8);
+    // Bottom-right is reserved for the battery / sync / label stack. Keep
+    // padding minimal so the polyline can claim as much space as possible.
+    let bat_w = group.width + s.u(2);
     let bat_h = group.height;
-    let canvas_bottom = s.u(c.h) - s.u(MARGIN as u32);
     let canvas_right = s.u(c.w) - s.u(MARGIN as u32);
+    let page_bottom = s.u(c.h) - s.u(4);
 
     let show_kudos = !config.show_totals && stats.total_kudos > 0;
 
     let bounds = if config.orientation == Orientation::Portrait {
-      // Portrait: polyline below text, full width.
-      //
-      // Line 2 is drawn at y + 56 in an 18pt font (~24px tall), so its
-      // bottom is at ~y + 80. Start the polyline at y + 84 to leave a
-      // 4px gap.
+      // Portrait: polyline below text, full width minus the battery column
+      // if extending past the battery top.
       let px = s.u(MARGIN as u32);
       let py = (y + s.i(84)) as u32;
-      let pw = canvas_right - px;
-      // Stop above the kudos line (top of 18pt text at h-MARGIN-24) or
-      // the battery indicator group, with a 4px clearance.
-      let max_bottom = if show_kudos {
-        s.u(c.h) - s.u(MARGIN as u32) - s.u(28)
-      } else {
-        s.u(c.h) - bat_h - s.u(4)
-      };
+      // Vertical extent: above kudos baseline (if shown) with a small gap,
+      // otherwise let it run to the page bottom.
+      let kudos_top = s.u(c.h) - s.u(MARGIN as u32);
+      let max_bottom = if show_kudos { kudos_top.saturating_sub(s.u(4)) } else { page_bottom };
       let ph = max_bottom.saturating_sub(py);
-      PolylineBounds { x: px, y: py, w: pw, h: ph }
-    } else {
-      // Landscape: polyline right of text
-      let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
-      let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
-      let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
-      let px = (text_right + s.i(16)) as u32;
-      let py = y as u32;
-      // Trim width to avoid battery block in bottom-right corner
+      // If the polyline extends down into the battery vertical band, trim
+      // its width on the right so it doesn't overlap.
       let bat_x = s.u(c.w) - bat_w;
-      let pw = if py + (canvas_bottom - py) > s.u(c.h) - bat_h {
-        bat_x.saturating_sub(px).saturating_sub(s.u(4))
+      let bat_top = s.u(c.h) - bat_h;
+      let pw = if py + ph > bat_top {
+        bat_x.saturating_sub(px)
       } else {
         canvas_right.saturating_sub(px)
       };
-      let ph = canvas_bottom.saturating_sub(py);
+      PolylineBounds { x: px, y: py, w: pw, h: ph }
+    } else {
+      // Landscape: polyline right of text, extending down to the page edge
+      // (kudos sits in the bottom-left, no horizontal overlap).
+      let line1_w = measure_text_width(font_bold, s.px(MAIN_FONT_SZ), &line1) as i32;
+      let line2_w = measure_text_width(font, s.px(SECONDARY_FONT_SZ), &line2) as i32;
+      let text_right = line1_x + s.u(ICON_SZ) as i32 + s.i(6) + line1_w.max(line2_w);
+      let px = (text_right + s.i(8)) as u32;
+      let py = y as u32;
+      let bat_x = s.u(c.w) - bat_w;
+      let bat_top = s.u(c.h) - bat_h;
+      let ph = page_bottom.saturating_sub(py);
+      // Trim width to clear the battery column if the box reaches it.
+      let pw = if py + ph > bat_top {
+        bat_x.saturating_sub(px)
+      } else {
+        canvas_right.saturating_sub(px)
+      };
       PolylineBounds { x: px, y: py, w: pw, h: ph }
     };
 
