@@ -877,7 +877,7 @@ fn draw_longest_entries(img: &mut RgbImage,
       draw_text_mut(img, BLACK, ms_x, y + s.i(2), detail_sz, font_bold, &ms);
       draw_text_mut(img, BLACK, time_x + time_col_w, y + s.i(2), detail_sz, font_bold, sep);
 
-      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, &longest.pace_or_speed);
+      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font, &longest.pace_or_speed);
       let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
       draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else if stats.show_all_sports {
@@ -917,7 +917,7 @@ fn draw_fastest_entries(img: &mut RgbImage,
   let pace_col_w = stats.run_race_bests
                         .iter()
                         .filter_map(|rb| rb.pace.as_deref())
-                        .map(|p| measure_text_width(font_bold, detail_sz, p) as i32)
+                        .map(|p| measure_text_width(font, detail_sz, p) as i32)
                         .max()
                         .unwrap_or(0);
   let h_prefix_col_w =
@@ -962,7 +962,7 @@ fn draw_fastest_entries(img: &mut RgbImage,
       draw_text_mut(img, BLACK, ms_x, y + s.i(2), detail_sz, font_bold, &ms);
       draw_text_mut(img, BLACK, ms_x + ms_col_w, y + s.i(2), detail_sz, font_bold, sep);
 
-      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font_bold, pace);
+      draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font, pace);
 
       if dist > rb.target_km * 1.1 {
         let suffix = format!("  ·  ({:.1}km)", dist);
