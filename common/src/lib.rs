@@ -125,6 +125,7 @@ pub struct ActivityHighlight {
   pub pace_or_speed:    String,
   pub date:             String,
   pub kudos:            u32,
+  pub elevation_gain_m: f64,
   /// True when the activity is a mountain bike ride (MountainBikeRide).
   pub is_mtb:           bool,
 }

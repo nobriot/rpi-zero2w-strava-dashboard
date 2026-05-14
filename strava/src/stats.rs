@@ -117,6 +117,7 @@ fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
                       pace_or_speed,
                       date: format_date(&a.start_date_local),
                       kudos: a.kudos_count,
+                      elevation_gain_m: a.total_elevation_gain,
                       is_mtb: a.is_mtb() }
 }
 

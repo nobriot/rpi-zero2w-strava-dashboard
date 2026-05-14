@@ -115,6 +115,12 @@ auth:
 test-unit:
     cargo test --package strava
 
+# Update local install and restart the service from the git repo
+update-local-install:
+    cargo build --release
+    mv target/release/strava-dashboard /usr/local/bin/strava-dashboard
+    sudo service strava-dashboard restart
+
 # Run snapshot tests — render all configs and compare against references
 snapshot:
     RUST_MIN_STACK=16777216 cargo test -p display --test snapshots -- --nocapture

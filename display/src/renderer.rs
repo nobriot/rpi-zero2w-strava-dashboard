@@ -1163,8 +1163,15 @@ fn draw_last_activity(img: &mut RgbImage,
       SportType::WeightTraining | SportType::Yoga | SportType::Pilates | SportType::Workout => {
         format!("{}  ·  {} kudos", last_time, last.kudos)
       },
-      _ => format!("{:.1}km  ·  {}  ·  {}  ·  {} kudos",
-                   last.distance_km, last.pace_or_speed, last_time, last.kudos),
+      _ => {
+        let mut parts =
+          format!("{:.1}km  ·  {}  ·  {}", last.distance_km, last_time, last.pace_or_speed);
+        if last.elevation_gain_m > 100.0 {
+          parts.push_str(&format!("  ·  {:.0}m ↑", last.elevation_gain_m));
+        }
+        parts.push_str(&format!("  ·  {} kudos", last.kudos));
+        parts
+      },
     };
     draw_text_mut(img,
                   SECONDARY_COLOR,
