@@ -860,6 +860,14 @@ fn draw_longest_entries(img: &mut RgbImage,
   let ms_x = time_x + h_prefix_col_w;
   let pace_x = time_x + time_col_w + sep_w;
 
+  // Anchor all line-2 starts at the leftmost line-1 first-ink across rows
+  // (i.e., the row with the longest distance / fewest leading spaces), so
+  // line 2s form a single aligned column.
+  let l1_ink_min =
+    longests.iter()
+            .map(|l| first_ink_offset(font_bold, detail_sz, &fmt_distance_km(l.distance_km)))
+            .fold(f32::INFINITY, f32::min);
+
   for sp in &stats.sports {
     let is_mtb = sp.longest.as_ref().is_some_and(|l| l.is_mtb);
     icons::draw_sport_icon(img, (x + s.i(4)) as u32, y as u32, sp.sport, is_mtb, BLACK, s.factor());
@@ -878,8 +886,9 @@ fn draw_longest_entries(img: &mut RgbImage,
       draw_text_mut(img, BLACK, time_x + time_col_w, y + s.i(2), detail_sz, font_bold, sep);
 
       draw_text_mut(img, BLACK, pace_x, y + s.i(2), detail_sz, font, &longest.pace_or_speed);
-      let line2 = format!("{}  ·  {}", truncate_str(&longest.name, 32), longest.date);
-      draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
+      let line2 = format!("{}  ·  {}", longest.date, truncate_str(&longest.name, 32));
+      let l2_x = text_x + (l1_ink_min - first_ink_offset(font, name_sz, &line2)).round() as i32;
+      draw_text_with_fallback(img, BLACK, l2_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else if stats.show_all_sports {
       draw_text_mut(img, BLACK, text_x, y + s.i(2), detail_sz, font, "—");
     }
@@ -970,7 +979,7 @@ fn draw_fastest_entries(img: &mut RgbImage,
       }
       let name = rb.name.as_deref().unwrap_or("—");
       let date = rb.date.as_deref().unwrap_or("—");
-      let line2 = format!("{}  ·  {}", truncate_str(name, 30), date);
+      let line2 = format!("{}  ·  {}", date, truncate_str(name, 30));
       draw_text_with_fallback(img, BLACK, text_x, y + s.i(22), name_sz, font, font_emoji, &line2);
     } else {
       draw_text_mut(img,
@@ -1148,7 +1157,7 @@ fn draw_last_activity(img: &mut RgbImage,
                            last.is_mtb,
                            BLACK,
                            s.factor());
-    let line1 = format!("{}  ·  {}", truncate_str(&last.name, 30), last.date);
+    let line1 = format!("{}  ·  {}", last.date, truncate_str(&last.name, 30));
     draw_text_with_fallback(img,
                             MAIN_COLOR,
                             line1_x + s.u(ICON_SZ) as i32 + s.i(6),
@@ -1388,6 +1397,24 @@ fn measure_text_width(font: &FontRef, scale: PxScale, text: &str) -> f32 {
     prev = Some(gid);
   }
   width
+}
+
+/// Pixel x of the leftmost ink in `text`, relative to the rendering
+/// origin -- skips leading whitespace by accumulating their advances.
+/// Used to align two lines drawn at different font sizes/weights so the
+/// first visible character of each lands at the same x.
+fn first_ink_offset(font: &FontRef, scale: PxScale, text: &str) -> f32 {
+  let scaled = font.as_scaled(scale);
+  let mut x = 0.0;
+  for c in text.chars() {
+    let gid = font.glyph_id(c);
+    let glyph = gid.with_scale_and_position(scale, ab_glyph::point(x, 0.0));
+    if let Some(outlined) = font.outline_glyph(glyph) {
+      return outlined.px_bounds().min.x;
+    }
+    x += scaled.h_advance(gid);
+  }
+  x
 }
 
 /// Draw text with emoji fallback. For each character, tries the primary font

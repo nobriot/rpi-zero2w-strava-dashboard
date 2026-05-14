@@ -98,7 +98,11 @@ pub fn compute(stats: &AthleteStats,
 }
 
 fn format_date(raw: &Option<String>) -> String {
-  raw.as_deref().unwrap_or("").get(..10).unwrap_or("").to_string()
+  let s = raw.as_deref().unwrap_or("");
+  match (s.get(8..10), s.get(5..7)) {
+    (Some(dd), Some(mm)) => format!("{dd}/{mm}"),
+    _ => String::new(),
+  }
 }
 
 fn to_highlight(a: &SummaryActivity, sport: SportType) -> ActivityHighlight {
