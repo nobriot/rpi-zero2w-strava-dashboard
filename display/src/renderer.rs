@@ -32,7 +32,7 @@ impl Canvas {
 const WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const BLACK: Rgb<u8> = Rgb([0, 0, 0]);
 const GREEN: Rgb<u8> = Rgb([0, 150, 0]);
-const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
+// const ORANGE: Rgb<u8> = Rgb([252, 76, 2]);
 const RED: Rgb<u8> = Rgb([200, 0, 0]);
 // const DARK_GRAY: Rgb<u8> = Rgb([120, 120, 120]);
 // const LIGHT_GRAY: Rgb<u8> = Rgb([210, 210, 210]);
@@ -406,7 +406,7 @@ fn draw_header(img: &mut RgbImage,
                orientation: Orientation,
                c: Canvas,
                s: Scale) {
-  draw_filled_rect_mut(img, Rect::at(0, 0).of_size(s.u(c.w), s.u(HEADER_H)), ORANGE);
+  draw_filled_rect_mut(img, Rect::at(0, 0).of_size(s.u(c.w), s.u(HEADER_H)), RED);
 
   let year = Utc::now().year();
   let title = format!("{} - {}", stats.athlete_first_name, year);
