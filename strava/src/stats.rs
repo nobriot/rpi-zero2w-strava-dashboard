@@ -1,5 +1,32 @@
-use crate::types::{AthleteStats, SummaryActivity};
+use crate::types::{ActivityTotal, AthleteStats, SummaryActivity};
 use common::{ActivityHighlight, DashboardStats, LongestBy, RunRaceBest, SportSummary, SportType};
+
+/// Build an `AthleteStats` whose `ytd_*_totals` are summed from `activities`.
+/// Used for historical-year (`--year`) requests, since Strava's
+/// `/athletes/{id}/stats` endpoint only reports YTD for the current year.
+pub fn synthesize_stats_from_activities(activities: &[SummaryActivity]) -> AthleteStats {
+  AthleteStats { ytd_run_totals: totals_for_sport(activities, SportType::Run),
+                 ytd_ride_totals: totals_for_sport(activities, SportType::Ride),
+                 ytd_swim_totals: totals_for_sport(activities, SportType::Swim),
+                 ..AthleteStats::default() }
+}
+
+fn totals_for_sport(activities: &[SummaryActivity], sport: SportType) -> Option<ActivityTotal> {
+  let mut total = ActivityTotal { count:             0,
+                                  distance:          0.0,
+                                  moving_time:       0.0,
+                                  elapsed_time:      0.0,
+                                  elevation_gain:    0.0,
+                                  achievement_count: None, };
+  for a in activities.iter().filter(|a| a.sport() == Some(sport)) {
+    total.count += 1;
+    total.distance += a.distance;
+    total.moving_time += a.moving_time as f64;
+    total.elapsed_time += a.elapsed_time as f64;
+    total.elevation_gain += a.total_elevation_gain;
+  }
+  if total.count == 0 { None } else { Some(total) }
+}
 
 /// Compute dashboard stats from aggregate athlete stats and the list of
 /// individual activities fetched for the current year.
@@ -10,6 +37,7 @@ pub fn compute(stats: &AthleteStats,
                activities: &[SummaryActivity],
                athlete_first_name: &str,
                show_all_sports: bool,
+               year: i32,
                longest_by_for: impl Fn(SportType) -> LongestBy)
                -> DashboardStats {
   let all_sport_types = [SportType::Run, SportType::Ride, SportType::Swim];
@@ -94,7 +122,8 @@ pub fn compute(stats: &AthleteStats,
                    run_race_bests,
                    total_distance_km,
                    total_elevation_gain_m,
-                   show_all_sports }
+                   show_all_sports,
+                   year }
 }
 
 fn format_date(raw: &Option<String>) -> String {
@@ -262,7 +291,28 @@ mod tests {
 
   fn compute_with(activities: &[SummaryActivity]) -> DashboardStats {
     let stats = crate::types::AthleteStats::default();
-    compute(&stats, activities, "Test", false, |_| LongestBy::default())
+    compute(&stats, activities, "Test", false, 2026, |_| LongestBy::default())
+  }
+
+  #[test]
+  fn test_synthesize_stats_from_activities() {
+    let run_a = make_run(5_000.0, 1500, "Run A", "2025-01-10");
+    let run_b = make_run(10_000.0, 3000, "Run B", "2025-06-15");
+    let ride = make_ride(40_000.0, 7200, "Ride", "2025-03-05");
+    let activities = vec![run_a, run_b, ride];
+
+    let stats = synthesize_stats_from_activities(&activities);
+
+    let runs = stats.ytd_totals(SportType::Run).unwrap();
+    assert_eq!(runs.count, 2);
+    assert_eq!(runs.distance, 15_000.0);
+    assert_eq!(runs.moving_time, 4500.0);
+
+    let rides = stats.ytd_totals(SportType::Ride).unwrap();
+    assert_eq!(rides.count, 1);
+    assert_eq!(rides.distance, 40_000.0);
+
+    assert!(stats.ytd_totals(SportType::Swim).is_none());
   }
 
   #[test]

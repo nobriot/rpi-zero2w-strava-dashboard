@@ -133,9 +133,17 @@ snapshot-update:
 preview:
     cargo run -- --once --save-png tmp/test.png --scale 2
 
-# Render a preview for a specific test config
-preview-config config:
-    cargo run -- --once --kiosk --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 2
+# Render a preview for a specific test config, optionally for a past year
+# Usage: just preview-config sabrina
+#        just preview-config sabrina 2025
+preview-config config year="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{year}}" ]; then
+        cargo run -- --kiosk --config tests/{{config}}.toml --save-png tmp/{{config}}-{{year}}.png --scale 2 --year {{year}}
+    else
+        cargo run -- --once --kiosk --config tests/{{config}}.toml --save-png tmp/{{config}}.png --scale 2
+    fi
 
 # Update gallery images in the book by re-rendering nicolas, sabrina and sabrina-portrait
 gallery:

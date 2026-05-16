@@ -184,7 +184,18 @@ impl Client {
   /// GET /athlete/activities — paginated fetch of activities since `after`
   /// (unix timestamp). Uses cache.
   pub fn get_activities(&mut self, after: i64) -> Result<Vec<SummaryActivity>, StravaError> {
-    if let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
+    self.get_activities_range(after, None, true)
+  }
+
+  /// GET /athlete/activities — paginated fetch of activities in the half-open
+  /// interval `[after, before)`. When `use_cache` is false, the cache is
+  /// neither consulted nor written (used for one-off `--year` queries).
+  pub fn get_activities_range(&mut self,
+                              after: i64,
+                              before: Option<i64>,
+                              use_cache: bool)
+                              -> Result<Vec<SummaryActivity>, StravaError> {
+    if use_cache && let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
       cached.sort_by(|a, b| b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref()));
       return Ok(cached);
     }
@@ -200,7 +211,11 @@ impl Client {
         break;
       }
 
-      let endpoint = format!("athlete/activities?after={after}&per_page={PER_PAGE}&page={page}");
+      let mut endpoint =
+        format!("athlete/activities?after={after}&per_page={PER_PAGE}&page={page}");
+      if let Some(b) = before {
+        endpoint.push_str(&format!("&before={b}"));
+      }
       let response = self.strava_api_get(&endpoint)?;
       let body = response.text().map_err(|_| StravaError::StravaApiResponseMissingBody)?;
       log::debug!("JSON:\n{body}");
@@ -220,7 +235,9 @@ impl Client {
       page += 1;
     }
 
-    self.cache.save("activities", &all_activities, Some(Self::ACTIVITIES_CACHE_TIME));
+    if use_cache {
+      self.cache.save("activities", &all_activities, Some(Self::ACTIVITIES_CACHE_TIME));
+    }
 
     // Sort newest-first (the API with `after` returns oldest-first)
     all_activities.sort_by(|a, b| {

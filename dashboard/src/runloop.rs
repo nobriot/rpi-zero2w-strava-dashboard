@@ -26,7 +26,7 @@ pub fn run(mut config: Config, args: Args) -> Result<()> {
       write_heartbeat("Regular start");
     }
 
-    if args.once {
+    if args.once || args.year.is_some() {
       return Ok(());
     }
 
@@ -81,7 +81,7 @@ fn run_kiosk(mut config: Config, args: Args) -> Result<()> {
     cycle::run(&mut config, &mut client, &args, &mut power_mgr)?;
     write_heartbeat("Kiosk start");
 
-    if args.once {
+    if args.once || args.year.is_some() {
       return Ok(());
     }
 

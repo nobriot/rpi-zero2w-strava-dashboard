@@ -60,6 +60,17 @@ pub struct Args {
   /// Append log output to a file (in addition to stderr)
   #[arg(long, value_name = "PATH")]
   pub log_file: Option<PathBuf>,
+
+  /// Render a one-off dashboard for a specific year (e.g. --year 2025).
+  /// Bypasses cache and exits after one render.
+  #[arg(long, value_name = "YYYY")]
+  pub year: Option<i32>,
+
+  /// Hide the bottom-right group (battery %, IP / OFFLINE label, sync
+  /// timestamp). Defaults to true under --kiosk or --year, false otherwise.
+  /// Pass --hide-bottom-right=false to force-show.
+  #[arg(long, num_args = 0..=1, default_missing_value = "true", value_name = "BOOL")]
+  pub hide_bottom_right: Option<bool>,
 }
 
 impl Args {
@@ -69,5 +80,11 @@ impl Args {
       Args::from_arg_matches_mut(&mut matches).map_err(|e| DashError::Argument(e.to_string()))?;
 
     Ok(args)
+  }
+
+  /// Resolve the effective `hide_bottom_right` value, defaulting to true under
+  /// --kiosk or --year when not passed explicitly.
+  pub fn hide_bottom_right(&self) -> bool {
+    self.hide_bottom_right.unwrap_or(self.kiosk || self.year.is_some())
   }
 }

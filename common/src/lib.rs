@@ -76,6 +76,9 @@ pub struct DashboardStats {
   pub total_elevation_gain_m: f64,
   /// Include all sports in display even if zero activities (demo mode)
   pub show_all_sports:        bool,
+
+  /// Year being summarized (header text + year-progress bar).
+  pub year: i32,
 }
 
 /// Battery status read from a UPS monitor (e.g. INA219).

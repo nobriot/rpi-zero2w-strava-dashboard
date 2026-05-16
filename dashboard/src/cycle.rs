@@ -37,7 +37,7 @@ fn run_once(config: &mut Config,
             client: &mut Option<strava::client::Client>,
             args: &Args)
             -> Result<()> {
-  let fetched = stats::fetch(config, client, args.show_all_sports)?;
+  let fetched = stats::fetch(config, client, args.show_all_sports, args.year)?;
   let battery = power::read_battery();
 
   let polyline_thickness = args.polyline_thickness.unwrap_or(config.display.polyline_thickness);
@@ -50,15 +50,16 @@ fn run_once(config: &mut Config,
     None
   };
 
-  render::present(RenderRequest { stats:       &fetched.stats,
-                                  battery:     battery.as_ref(),
-                                  avatar:      fetched.avatar.as_deref(),
-                                  is_offline:  fetched.is_offline,
-                                  ip_address:  ip.as_deref(),
-                                  display_cfg: &display_cfg,
-                                  scale:       args.scale,
-                                  save_png:    args.save_png.as_deref().map(Path::new),
-                                  kiosk:       args.kiosk, })?;
+  render::present(RenderRequest { stats:             &fetched.stats,
+                                  battery:           battery.as_ref(),
+                                  avatar:            fetched.avatar.as_deref(),
+                                  is_offline:        fetched.is_offline,
+                                  ip_address:        ip.as_deref(),
+                                  display_cfg:       &display_cfg,
+                                  scale:             args.scale,
+                                  save_png:          args.save_png.as_deref().map(Path::new),
+                                  kiosk:             args.kiosk,
+                                  hide_bottom_right: args.hide_bottom_right(), })?;
 
   fetched.stats.print_summary();
   Ok(())
