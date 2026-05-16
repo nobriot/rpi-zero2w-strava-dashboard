@@ -2,6 +2,7 @@ use crate::cache::Cache;
 use crate::config::StravaConfig;
 use crate::errors::StravaError;
 use crate::types::{AthleteStats, DetailedAthlete, SummaryActivity, TokenResponse};
+use chrono::{Datelike, NaiveDate, Utc};
 use reqwest::blocking::Client as ReqwestClient;
 
 pub struct Client {
@@ -13,8 +14,10 @@ pub struct Client {
 }
 
 impl Client {
-  /// Query activities at most every 3 hours
+  /// Query activities at most every 3 hours (current year, mutable)
   const ACTIVITIES_CACHE_TIME: u64 = 3600 * 3;
+  /// Past-year activities never change; cache them for a week
+  const ACTIVITIES_PAST_YEAR_CACHE_TIME: u64 = 3600 * 24 * 7;
   /// Keep athele cache for 1 week before quering again
   const ATHELE_CACHE_TIME: u64 = 3600 * 24 * 7;
   /// Refresh generic stats at most once per day
@@ -181,25 +184,43 @@ impl Client {
     Ok(stats)
   }
 
-  /// GET /athlete/activities — paginated fetch of activities since `after`
-  /// (unix timestamp). Uses cache.
-  pub fn get_activities(&mut self, after: i64) -> Result<Vec<SummaryActivity>, StravaError> {
-    self.get_activities_range(after, None, true)
-  }
+  /// Fetch all activities for a calendar year. Past years are bounded with a
+  /// `before` timestamp (immutable history); the current year stays
+  /// open-ended so newly-uploaded activities show up. Caches results under a
+  /// per-year subdirectory with a longer TTL for past years.
+  pub fn get_activities_for_year(&mut self,
+                                 year: i32)
+                                 -> Result<Vec<SummaryActivity>, StravaError> {
+    let is_past = year < Utc::now().year();
+    let year_cache = self.cache.for_year(year);
 
-  /// GET /athlete/activities — paginated fetch of activities in the half-open
-  /// interval `[after, before)`. When `use_cache` is false, the cache is
-  /// neither consulted nor written (used for one-off `--year` queries).
-  pub fn get_activities_range(&mut self,
-                              after: i64,
-                              before: Option<i64>,
-                              use_cache: bool)
-                              -> Result<Vec<SummaryActivity>, StravaError> {
-    if use_cache && let Some(mut cached) = self.cache.load::<Vec<SummaryActivity>>("activities") {
+    if let Some(mut cached) = year_cache.load::<Vec<SummaryActivity>>("activities") {
       cached.sort_by(|a, b| b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref()));
       return Ok(cached);
     }
 
+    let after = jan_first_utc(year);
+    let before = if is_past { Some(jan_first_utc(year + 1)) } else { None };
+    let mut activities = self.fetch_activities_pages(after, before)?;
+
+    let ttl = if is_past {
+      Self::ACTIVITIES_PAST_YEAR_CACHE_TIME
+    } else {
+      Self::ACTIVITIES_CACHE_TIME
+    };
+    year_cache.save("activities", &activities, Some(ttl));
+
+    // Sort newest-first (the API with `after` returns oldest-first)
+    activities.sort_by(|a, b| b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref()));
+    Ok(activities)
+  }
+
+  /// Paginated fetch of activities in the half-open interval `[after, before)`.
+  /// No caching -- callers handle that.
+  fn fetch_activities_pages(&mut self,
+                            after: i64,
+                            before: Option<i64>)
+                            -> Result<Vec<SummaryActivity>, StravaError> {
     let mut all_activities: Vec<SummaryActivity> = Vec::new();
     let mut page = 1u32;
     const PER_PAGE: u32 = 200;
@@ -235,15 +256,6 @@ impl Client {
       page += 1;
     }
 
-    if use_cache {
-      self.cache.save("activities", &all_activities, Some(Self::ACTIVITIES_CACHE_TIME));
-    }
-
-    // Sort newest-first (the API with `after` returns oldest-first)
-    all_activities.sort_by(|a, b| {
-                    b.start_date_local.as_deref().cmp(&a.start_date_local.as_deref())
-                  });
-
     Ok(all_activities)
   }
 
@@ -274,4 +286,13 @@ impl Client {
       StravaError::StravaApiResponseError(e.to_string())
     }
   }
+}
+
+/// Unix timestamp for Jan 1 of `year` at 00:00:00 UTC.
+fn jan_first_utc(year: i32) -> i64 {
+  NaiveDate::from_ymd_opt(year, 1, 1).unwrap()
+                                     .and_hms_opt(0, 0, 0)
+                                     .unwrap()
+                                     .and_utc()
+                                     .timestamp()
 }

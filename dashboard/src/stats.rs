@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::errors::{DashError, Result};
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{Datelike, Utc};
 
 pub struct Fetched {
   pub stats:      common::DashboardStats,
@@ -11,31 +11,26 @@ pub struct Fetched {
 /// Fetch Strava data and compute dashboard stats.
 /// Tries fresh cache first (no client needed), then falls back to online fetch,
 /// then to stale cache if the network is unavailable.
-///
-/// When `year_override` is `Some`, caches are bypassed entirely and activities
-/// are fetched for that specific year only.
 pub fn fetch(config: &mut Config,
              client: &mut Option<strava::client::Client>,
              show_all_sports: bool,
              year_override: Option<i32>)
              -> Result<Fetched> {
+  let year = year_override.unwrap_or_else(|| Utc::now().year());
   let client_id = config.strava.client_id().to_string();
-  if year_override.is_none()
-     && let Some(fetched) = try_fresh_cache(&client_id, &config.display, show_all_sports)
-  {
+
+  if let Some(fetched) = try_fresh_cache(&client_id, &config.display, show_all_sports, year) {
     return Ok(fetched);
   }
 
-  match fetch_online(config, client, show_all_sports, year_override) {
+  match fetch_online(config, client, show_all_sports, year) {
     Ok((stats, avatar)) => Ok(Fetched { stats,
                                         avatar,
                                         is_offline: false }),
     Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(ref msg))) => {
-      if year_override.is_some() {
-        return Err(DashError::Strava(strava::errors::StravaError::NetworkUnavailable(msg.clone())));
-      }
       log::warn!("Network unavailable ({msg}), falling back to cached data");
-      let (stats, avatar) = fetch_from_stale_cache(&client_id, &config.display, show_all_sports)?;
+      let (stats, avatar) =
+        fetch_from_stale_cache(&client_id, &config.display, show_all_sports, year)?;
       Ok(Fetched { stats,
                    avatar,
                    is_offline: true })
@@ -66,20 +61,24 @@ fn save_athlete_id(client_id: &str, athlete_id: u64) {
 /// Uses the client_id -> athlete_id mapping to find the right cache directory.
 fn try_fresh_cache(client_id: &str,
                    display_cfg: &display::config::DisplayConfig,
-                   show_all_sports: bool)
+                   show_all_sports: bool,
+                   year: i32)
                    -> Option<Fetched> {
   let athlete_id = cached_athlete_id(client_id)?;
   let cache = strava::cache::Cache::new().for_athlete(athlete_id);
 
   let athlete: strava::types::DetailedAthlete = cache.load("athlete")?;
-  let stats: strava::types::AthleteStats = cache.load("stats")?;
-  let activities: Vec<strava::types::SummaryActivity> = cache.load("activities")?;
+  let activities: Vec<strava::types::SummaryActivity> = cache.for_year(year).load("activities")?;
+  let stats: strava::types::AthleteStats = if year == Utc::now().year() {
+    cache.load("stats")?
+  } else {
+    strava::stats::synthesize_stats_from_activities(&activities)
+  };
   let avatar = std::fs::read(cache.dir().join("avatar.img")).ok();
 
   let firstname = athlete.firstname.as_deref().unwrap_or("Athlete");
   log::info!("All cache fresh: athlete={}, activities={}", firstname, activities.len());
 
-  let year = Utc::now().year();
   let dashboard =
     strava::stats::compute(&stats, &activities, firstname, show_all_sports, year, |sport| {
       display_cfg.longest_by_for(sport)
@@ -102,11 +101,11 @@ fn get_or_create_client<'a>(config: &Config,
 fn fetch_online(config: &mut Config,
                 client: &mut Option<strava::client::Client>,
                 show_all_sports: bool,
-                year_override: Option<i32>)
+                year: i32)
                 -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let c = get_or_create_client(config, client);
   c.get_token()?;
-  log::info!("Fetching Strava stats");
+  log::info!("Fetching Strava stats for year {year}");
 
   log::debug!("Getting athlete");
   let athlete = c.get_athlete()?;
@@ -116,24 +115,14 @@ fn fetch_online(config: &mut Config,
 
   let avatar = load_or_fetch_avatar(c, athlete.profile.as_deref());
 
-  let year = year_override.unwrap_or_else(|| Utc::now().year());
-  let year_start = jan_first_utc(year);
-
-  let activities = if let Some(target_year) = year_override {
-    let year_end = jan_first_utc(target_year + 1);
-    log::debug!("Getting activities for year {target_year} ({year_start}..{year_end}), no cache");
-    c.get_activities_range(year_start, Some(year_end), false)?
-  } else {
-    log::debug!("Getting activities since {year_start}");
-    c.get_activities(year_start)?
-  };
+  let activities = c.get_activities_for_year(year)?;
   log::debug!("Fetched {} activities", activities.len());
 
-  let stats = if year_override.is_some() {
-    strava::stats::synthesize_stats_from_activities(&activities)
-  } else {
+  let stats = if year == Utc::now().year() {
     log::debug!("Getting athlete stats");
     c.get_athlete_stats(athlete.id)?
+  } else {
+    strava::stats::synthesize_stats_from_activities(&activities)
   };
 
   if c.token_refreshed() {
@@ -155,19 +144,12 @@ fn fetch_online(config: &mut Config,
   Ok((dashboard, avatar))
 }
 
-fn jan_first_utc(year: i32) -> i64 {
-  NaiveDate::from_ymd_opt(year, 1, 1).unwrap()
-                                     .and_hms_opt(0, 0, 0)
-                                     .unwrap()
-                                     .and_utc()
-                                     .timestamp()
-}
-
 /// Offline fallback using the client_id -> athlete_id mapping, or
 /// most_recent_athlete_cache as a last resort.
 fn fetch_from_stale_cache(client_id: &str,
                           display_cfg: &display::config::DisplayConfig,
-                          show_all_sports: bool)
+                          show_all_sports: bool,
+                          year: i32)
                           -> Result<(common::DashboardStats, Option<Vec<u8>>)> {
   let cache = strava::cache::Cache::new();
 
@@ -181,16 +163,19 @@ fn fetch_from_stale_cache(client_id: &str,
   let athlete: Option<strava::types::DetailedAthlete> = athlete_cache.load_stale("athlete");
   let firstname = athlete.as_ref().and_then(|a| a.firstname.as_deref()).unwrap_or("Athlete");
 
-  let stats: strava::types::AthleteStats = athlete_cache.load_stale("stats").unwrap_or_default();
-
   let activities: Vec<strava::types::SummaryActivity> =
-    athlete_cache.load_stale("activities").unwrap_or_default();
+    athlete_cache.for_year(year).load_stale("activities").unwrap_or_default();
+
+  let stats: strava::types::AthleteStats = if year == Utc::now().year() {
+    athlete_cache.load_stale("stats").unwrap_or_default()
+  } else {
+    strava::stats::synthesize_stats_from_activities(&activities)
+  };
 
   let avatar = std::fs::read(athlete_cache.dir().join("avatar.img")).ok();
 
   log::info!("Offline fallback: athlete={}, activities={}", firstname, activities.len());
 
-  let year = Utc::now().year();
   let dashboard =
     strava::stats::compute(&stats, &activities, firstname, show_all_sports, year, |sport| {
       display_cfg.longest_by_for(sport)

@@ -47,6 +47,17 @@ impl Cache {
            default_max_age: self.default_max_age, }
   }
 
+  /// Return a new Cache scoped to a `<year>/` subdirectory of the current dir.
+  ///
+  /// Unlike `for_athlete`, this does **not** rebase from root -- the year
+  /// folder is always nested under whatever scope the caller has already
+  /// established (typically per-athlete).
+  pub fn for_year(&self, year: i32) -> Self {
+    Self { root:            self.root.clone(),
+           dir:             self.dir.join(year.to_string()),
+           default_max_age: self.default_max_age, }
+  }
+
   /// The cache directory path (per-athlete after `for_athlete`).
   pub fn dir(&self) -> &Path {
     &self.dir
@@ -199,6 +210,14 @@ mod tests {
     assert_eq!(c1.dir(), root.join("12345"));
     assert_eq!(c2.dir(), root.join("12345"));
     assert_eq!(c3.dir(), root.join("67890"));
+  }
+
+  #[test]
+  fn for_year_nests_under_athlete() {
+    let root = PathBuf::from("/tmp/cache-test-root");
+    let c0 = at(&root);
+    let scoped = c0.for_athlete(12345).for_year(2025);
+    assert_eq!(scoped.dir(), root.join("12345").join("2025"));
   }
 
   #[test]
